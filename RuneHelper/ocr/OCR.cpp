@@ -6,12 +6,10 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
-#include <future>
 
 OCR::~OCR()
 {
-    if (initialized_)
-        api_.End();
+    StopWorkers();
 }
 
 bool OCR::Init(const std::string& tessdataPath)
@@ -27,37 +25,11 @@ bool OCR::Init(const std::string& tessdataPath)
         return false;
     }
 
-    int rc = api_.Init(tessdataPath.c_str(), "eng", tesseract::OEM_LSTM_ONLY);
-    if (rc != 0)
-    {
-        LOG_ERROR("Tesseract api.Init failed, rc=" + std::to_string(rc));
-        return false;
-    }
-
-    SetupTesseractApi(api_);
-
     int passes = config_ ? config_->ocrPasses : 1;
-    passes = std::clamp(passes, 1, 8);
+    passes = std::clamp(passes, 1, 6);
 
-    workerApis_.clear();
-    workerApis_.reserve(passes);
-
-    for (int i = 0; i < passes; ++i)
-    {
-        auto api = std::make_unique<tesseract::TessBaseAPI>();
-
-        rc = api->Init(tessdataPath.c_str(), "eng", tesseract::OEM_LSTM_ONLY);
-
-        if (rc != 0)
-        {
-            LOG_ERROR("Tesseract worker api.Init failed, rc=" + std::to_string(rc));
-            return false;
-        }
-
-        SetupTesseractApi(*api);
-
-        workerApis_.push_back(std::move(api));
-    }
+    if (!CreateWorkers(static_cast<size_t>(passes)))
+        return false;
 
     initialized_ = true;
     LOG_INFO("OCR initialized");
@@ -87,55 +59,149 @@ void OCR::SetConfig(const AppConfig* config)
 
 bool OCR::ReinitializeWorkers(const AppConfig& config)
 {
-    std::lock_guard lock(workerMutex_);
-
-    workerApis_.clear();
-
     int passes = std::clamp(config.ocrPasses, 1, 6);
+    return CreateWorkers(static_cast<size_t>(passes));
+}
 
-    workerApis_.reserve(passes);
+bool OCR::CreateWorkers(size_t passes)
+{
+    StopWorkers();
 
-    for (int i = 0; i < passes; ++i)
+    std::vector<std::unique_ptr<tesseract::TessBaseAPI>> apis;
+    apis.reserve(passes);
+
+    for (size_t i = 0; i < passes; ++i)
     {
         auto api = std::make_unique<tesseract::TessBaseAPI>();
         int rc = api->Init(tessdataPath_.c_str(), "eng", tesseract::OEM_LSTM_ONLY);
         if (rc != 0)
+        {
+            LOG_ERROR("Tesseract worker api.Init failed, rc=" + std::to_string(rc));
             return false;
+        }
 
         SetupTesseractApi(*api);
+        apis.push_back(std::move(api));
+    }
 
-        workerApis_.push_back(std::move(api));
+    {
+        std::lock_guard lock(workerMutex_);
+        stopWorkers_ = false;
+        activeGray_ = nullptr;
+        activePassCount_ = 0;
+        pendingWorkers_ = 0;
+        ++batchId_;
+
+        workerApis_ = std::move(apis);
+        workerResults_.clear();
+        workerResults_.resize(workerApis_.size());
+        workerThreads_.clear();
+        workerThreads_.reserve(workerApis_.size());
+
+        for (size_t i = 0; i < workerApis_.size(); ++i)
+            workerThreads_.emplace_back([this, i](std::stop_token) { WorkerLoop(i); });
     }
 
     return true;
 }
 
-std::vector<double> OCR::BuildThresholds(const AppConfig& config)
+void OCR::StopWorkers()
+{
+    {
+        std::lock_guard lock(workerMutex_);
+        stopWorkers_ = true;
+        pendingWorkers_ = 0;
+        activeGray_ = nullptr;
+        activePassCount_ = 0;
+        ++batchId_;
+    }
+
+    workerCv_.notify_all();
+    resultCv_.notify_all();
+    workerThreads_.clear();
+
+    {
+        std::lock_guard lock(workerMutex_);
+        workerApis_.clear();
+        workerResults_.clear();
+        stopWorkers_ = false;
+    }
+}
+
+void OCR::WorkerLoop(size_t index)
+{
+    uint64_t seenBatch = 0;
+
+    while (true)
+    {
+        const cv::Mat* gray = nullptr;
+        double threshold = 0.0;
+        uint64_t batch = 0;
+
+        {
+            std::unique_lock lock(workerMutex_);
+            workerCv_.wait(lock, [&]
+                {
+                    return stopWorkers_ || batchId_ != seenBatch;
+                });
+
+            if (stopWorkers_)
+                return;
+
+            seenBatch = batchId_;
+            if (index >= activePassCount_ || !activeGray_)
+                continue;
+
+            gray = activeGray_;
+            threshold = activeThresholds_[index];
+            batch = seenBatch;
+        }
+
+        cv::Mat prepared;
+        cv::threshold(*gray, prepared, threshold, 255, cv::THRESH_BINARY);
+        auto result = RecognizePreparedWithApi(*workerApis_[index], prepared);
+
+        {
+            std::lock_guard lock(workerMutex_);
+            if (batch != batchId_ || index >= workerResults_.size())
+                continue;
+
+            workerResults_[index] = std::move(result);
+            if (pendingWorkers_ > 0)
+                --pendingWorkers_;
+
+            if (pendingWorkers_ == 0)
+                resultCv_.notify_one();
+        }
+    }
+}
+
+OCR::ThresholdSet OCR::BuildThresholds(const AppConfig& config)
 {
     int passes = config.ocrPasses;
 
     switch (passes)
     {
     case 1:
-        return { 130.0 };
+        return { { 130.0 }, 1 };
 
     case 2:
-        return { 60.0, 130.0 };
+        return { { 60.0, 130.0 }, 2 };
 
     case 3:
-        return { 30.0, 60.0, 130.0 };
+        return { { 30.0, 60.0, 130.0 }, 3 };
 
     case 4:
-        return { 30.0, 60.0, 130.0, 180.0 };
+        return { { 30.0, 60.0, 130.0, 180.0 }, 4 };
 
     case 5:
-        return { 20.0, 30.0, 60.0, 130.0, 180.0 };
+        return { { 20.0, 30.0, 60.0, 130.0, 180.0 }, 5 };
 
     case 6:
-        return { 20.0, 30.0, 60.0, 130.0, 180.0, 220.0 };
+        return { { 20.0, 30.0, 60.0, 130.0, 180.0, 220.0 }, 6 };
 
     default:
-        return { 130.0 };
+        return { { 130.0 }, 1 };
     }
 }
 
@@ -148,32 +214,45 @@ std::vector<LootLine> OCR::RecognizeLoot(const cv::Mat& img, const AppConfig& co
     cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
 
     auto thresholds = BuildThresholds(config);
-    if (thresholds.empty())
+    if (thresholds.count == 0)
         return {};
 
-    const size_t passCount = (std::min)(thresholds.size(), workerApis_.size());
+    std::unique_lock lock(workerMutex_);
 
-    std::vector<std::future<std::vector<LootLine>>> futures;
-    futures.reserve(passCount);
-        
-    for (size_t i = 0; i < passCount; ++i)
+    const size_t passCount = (std::min)(thresholds.count, workerApis_.size());
+    if (passCount == 0)
+        return {};
+
+    if (passCount == 1)
     {
-        futures.emplace_back(
-            std::async(
-                std::launch::async,
-                [this, gray, threshold = thresholds[i], i]()
-                {
-                    cv::Mat prepared;
-                    cv::threshold(gray, prepared, threshold, 255, cv::THRESH_BINARY);
-                    return RecognizePreparedWithApi(*workerApis_[i], prepared);
-                }));
+        cv::Mat prepared;
+        cv::threshold(gray, prepared, thresholds.values[0], 255, cv::THRESH_BINARY);
+        return RecognizePreparedWithApi(*workerApis_[0], prepared);
     }
+
+    for (size_t i = 0; i < passCount; ++i)
+        activeThresholds_[i] = thresholds.values[i];
+
+    activeGray_ = &gray;
+    activePassCount_ = passCount;
+    pendingWorkers_ = passCount;
+    workerResults_.clear();
+    workerResults_.resize(passCount);
+    ++batchId_;
+
+    workerCv_.notify_all();
+    resultCv_.wait(lock, [this]
+        {
+            return pendingWorkers_ == 0 || stopWorkers_;
+        });
+
+    activeGray_ = nullptr;
+    activePassCount_ = 0;
 
     std::vector<LootLine> best;
 
-    for (auto& f : futures)
+    for (auto& result : workerResults_)
     {
-        auto result = f.get();
         if (result.size() > best.size())
             best = std::move(result);
     }

@@ -1,7 +1,10 @@
 #include "RuneHelperApp.h"
 
+#include <algorithm>
 #include <chrono>
 #include <unordered_set>
+
+#include <opencv2/imgproc.hpp>
 
 #include "core/Helpers.h"
 #include "core/Logger.h"
@@ -18,6 +21,56 @@
 #include "platform/linux/ResourceHelper.h"
 #include "platform/linux/ScreenCapture.h"
 #endif
+
+namespace
+{
+constexpr int kStableOcrFramesBeforeReuse = 3;
+constexpr double kOcrPixelDiffThreshold = 8.0;
+constexpr double kOcrChangedPixelRatioThreshold = 0.002;
+constexpr int kMaxStableOcrIntervalMs = 2000;
+constexpr int kOcrSleepChunkMs = 50;
+
+cv::Mat ToOcrGray(const cv::Mat& img)
+{
+    if (img.channels() == 1)
+        return img.clone();
+
+    cv::Mat gray;
+    cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+    return gray;
+}
+
+bool IsSimilarOcrFrame(const cv::Mat& currentGray, const cv::Mat& previousGray)
+{
+    if (currentGray.empty() ||
+        previousGray.empty() ||
+        currentGray.size() != previousGray.size() ||
+        currentGray.type() != previousGray.type())
+    {
+        return false;
+    }
+
+    cv::Mat diff;
+    cv::Mat changed;
+    cv::absdiff(currentGray, previousGray, diff);
+    cv::threshold(diff, changed, kOcrPixelDiffThreshold, 255, cv::THRESH_BINARY);
+
+    const double changedPixels = static_cast<double>(cv::countNonZero(changed));
+    const double totalPixels = static_cast<double>(currentGray.total());
+    return totalPixels > 0.0 && (changedPixels / totalPixels) < kOcrChangedPixelRatioThreshold;
+}
+
+void SleepOcrLoop(std::atomic<bool>& running, const std::atomic<bool>& rebuildRequested, const std::atomic<bool>& singleSnapshotRequested, int sleepMs)
+{
+    int remainingMs = sleepMs;
+    while (running && remainingMs > 0 && !rebuildRequested.load() && !singleSnapshotRequested.load())
+    {
+        const int chunkMs = std::min(remainingMs, kOcrSleepChunkMs);
+        std::this_thread::sleep_for(std::chrono::milliseconds(chunkMs));
+        remainingMs -= chunkMs;
+    }
+}
+}
 
 int RuneHelperApp::Run()
 {
@@ -137,6 +190,10 @@ void RuneHelperApp::OcrWorkerLoop()
     }
 
     auto lastRefreshCheck = std::chrono::steady_clock::now();
+    cv::Mat lastOcrGray;
+    std::vector<LootLine> lastLoot;
+    int stableOcrFrames = 0;
+    bool forceOcrFrame = false;
 
     while (running_)
     {
@@ -160,7 +217,15 @@ void RuneHelperApp::OcrWorkerLoop()
         }
 
         if (ocrRebuildRequested_.exchange(false))
-            ocr_.ReinitializeWorkers(localConfig);
+        {
+            if (!ocr_.ReinitializeWorkers(localConfig))
+                LOG_ERROR("OCR worker rebuild failed");
+
+            lastOcrGray.release();
+            lastLoot.clear();
+            stableOcrFrames = 0;
+            forceOcrFrame = true;
+        }
 
         bool runSingleSnapshot = singleSnapshotRequested_.exchange(false);
 
@@ -171,19 +236,27 @@ void RuneHelperApp::OcrWorkerLoop()
 
         if (!localConfig.ocrEnabled && !runSingleSnapshot && !keepSnapshot)
         {
+            lastOcrGray.release();
+            lastLoot.clear();
+            stableOcrFrames = 0;
+
             {
                 std::lock_guard lock(overlayMutex_);
                 sharedTexts_.clear();
                 overlayDirty_ = true;
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            SleepOcrLoop(running_, ocrRebuildRequested_, singleSnapshotRequested_, 100);
             continue;
         }
 
         if (region_.empty())
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            lastOcrGray.release();
+            lastLoot.clear();
+            stableOcrFrames = 0;
+
+            SleepOcrLoop(running_, ocrRebuildRequested_, singleSnapshotRequested_, 100);
             continue;
         }
 
@@ -205,7 +278,27 @@ void RuneHelperApp::OcrWorkerLoop()
 
         if (!img.empty())
         {
-            auto loot = ocr_.RecognizeLoot(img, localConfig);
+            std::vector<LootLine> loot;
+            cv::Mat currentGray = ToOcrGray(img);
+            const bool similarFrame = !forceOcrFrame && IsSimilarOcrFrame(currentGray, lastOcrGray);
+
+            if (similarFrame)
+                ++stableOcrFrames;
+            else
+                stableOcrFrames = 0;
+
+            if (similarFrame && stableOcrFrames >= kStableOcrFramesBeforeReuse && !lastLoot.empty())
+            {
+                loot = lastLoot;
+            }
+            else
+            {
+                loot = ocr_.RecognizeLoot(img, localConfig);
+                lastLoot = loot;
+                forceOcrFrame = false;
+            }
+
+            lastOcrGray = std::move(currentGray);
 
             DebugData debug;
             std::vector<OverlayText> newTexts;
@@ -290,7 +383,11 @@ void RuneHelperApp::OcrWorkerLoop()
             }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(localConfig.ocrIntervalMs));
+        int sleepMs = localConfig.ocrIntervalMs;
+        if (stableOcrFrames >= kStableOcrFramesBeforeReuse)
+            sleepMs = std::min(localConfig.ocrIntervalMs * 2, kMaxStableOcrIntervalMs);
+
+        SleepOcrLoop(running_, ocrRebuildRequested_, singleSnapshotRequested_, sleepMs);
     }
 }
 

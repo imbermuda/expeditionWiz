@@ -167,7 +167,7 @@ void UIDraw::DrawMainTab(UIManager& manager, UIState& state)
         state.wantsOCRRebuild = true;
     }
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("More passes = better OCR recognize, but higher CPU usage\nChanging OCR passes requires OCR restart.");
+        ImGui::SetTooltip("More passes can improve OCR, but use more CPU.");
 
     /*
     ImGui::SliderFloat("OCR Threshold", reinterpret_cast<float*>(&config_->ocrThreshold), 0.0f, 255.0f);
