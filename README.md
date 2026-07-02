@@ -34,7 +34,7 @@ Open the latest successful workflow run and download the artifact from the **Art
 
 ## How to use
 
-Click **Select Region**, then drag a rectangle around the Runeshape loot list.
+Click **Select Region**, then drag a rectangle around the Runeshape loot list. This only needs to be done once; RuneHelper saves the selected region in its config. Select it again only if the game window, UI scale, or menu position changes.
 
 ![Region selection guide](assets/howto.gif)
 
