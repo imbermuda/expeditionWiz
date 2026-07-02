@@ -57,7 +57,6 @@ public:
     bool WantsSingleSnapshot();
     bool WantsTestOcr();
     bool WantsResetOcr();
-    bool WantsOCRRebuild();
     bool WantsRegisterHotkeys();
 
     bool IsRegionHovered() const;

@@ -131,11 +131,6 @@ bool UIManager::WantsResetOcr()
     return std::exchange(state_.wantsResetOcr, false);
 }
 
-bool UIManager::WantsOCRRebuild()
-{
-    return std::exchange(state_.wantsOCRRebuild, false);
-}
-
 bool UIManager::WantsRegisterHotkeys()
 {
     return std::exchange(state_.wantsRegisterHotkeys, false);

@@ -55,7 +55,6 @@ void ConfigManager::Normalize(AppConfig& config)
     config.regionH = std::max(0, config.regionH);
     config.ocrScale = std::clamp(config.ocrScale, 0.5f, 4.0f);
     config.ocrThreshold = std::clamp(config.ocrThreshold, 0.0f, 255.0f);
-    config.ocrPasses = std::clamp(config.ocrPasses, 1, 6);
     config.ocrIntervalMs = std::clamp(config.ocrIntervalMs, 100, 2000);
     config.overlayFontSize = std::clamp(config.overlayFontSize, 8, 48);
     config.priceRefreshMinutes = std::clamp(config.priceRefreshMinutes, 1, 60);
@@ -87,7 +86,6 @@ bool ConfigManager::Load()
     config_.ocrAutoDetect   = j.value("ocrAutoDetect",  config_.ocrAutoDetect);
     config_.ocrScale        = j.value("ocrScale",       config_.ocrScale);
     config_.ocrThreshold    = j.value("ocrThreshold",   config_.ocrThreshold);
-    config_.ocrPasses       = j.value("ocrPasses",      config_.ocrPasses);
     config_.ocrIntervalMs   = j.value("ocrIntervalMs",  config_.ocrIntervalMs);
 
     config_.hotkeyToggleOCR         = j.value("hotkeyToggleOCR",        config_.hotkeyToggleOCR);
@@ -130,7 +128,6 @@ bool ConfigManager::Save() const
     j["ocrAutoDetect"]  = config.ocrAutoDetect;
     j["ocrScale"]       = config.ocrScale;
     j["ocrThreshold"]   = config.ocrThreshold;
-    j["ocrPasses"]      = config.ocrPasses;
     j["ocrIntervalMs"]  = config.ocrIntervalMs;
 
     j["overlayOffsetX"]     = config.overlayOffsetX;

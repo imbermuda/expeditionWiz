@@ -60,10 +60,10 @@ bool IsSimilarOcrFrame(const cv::Mat& currentGray, const cv::Mat& previousGray)
     return totalPixels > 0.0 && (changedPixels / totalPixels) < kOcrChangedPixelRatioThreshold;
 }
 
-void SleepOcrLoop(std::atomic<bool>& running, const std::atomic<bool>& rebuildRequested, const std::atomic<bool>& singleSnapshotRequested, int sleepMs)
+void SleepOcrLoop(std::atomic<bool>& running, const std::atomic<bool>& singleSnapshotRequested, int sleepMs)
 {
     int remainingMs = sleepMs;
-    while (running && remainingMs > 0 && !rebuildRequested.load() && !singleSnapshotRequested.load())
+    while (running && remainingMs > 0 && !singleSnapshotRequested.load())
     {
         const int chunkMs = std::min(remainingMs, kOcrSleepChunkMs);
         std::this_thread::sleep_for(std::chrono::milliseconds(chunkMs));
@@ -116,7 +116,6 @@ bool RuneHelperApp::Init()
     updateChecker_.Start();
     ui_.SetUpdateChecker(&updateChecker_);
 
-    ocr_.SetConfig(config_);
     priceCache_.SetRefreshMinutes(config_->priceRefreshMinutes);
     priceCache_.SetLeague(config_->priceLeague);
 
@@ -216,17 +215,6 @@ void RuneHelperApp::OcrWorkerLoop()
             }
         }
 
-        if (ocrRebuildRequested_.exchange(false))
-        {
-            if (!ocr_.ReinitializeWorkers(localConfig))
-                LOG_ERROR("OCR worker rebuild failed");
-
-            lastOcrGray.release();
-            lastLoot.clear();
-            stableOcrFrames = 0;
-            forceOcrFrame = true;
-        }
-
         bool runSingleSnapshot = singleSnapshotRequested_.exchange(false);
 
         if (runSingleSnapshot)
@@ -246,7 +234,7 @@ void RuneHelperApp::OcrWorkerLoop()
                 overlayDirty_ = true;
             }
 
-            SleepOcrLoop(running_, ocrRebuildRequested_, singleSnapshotRequested_, 100);
+            SleepOcrLoop(running_, singleSnapshotRequested_, 100);
             continue;
         }
 
@@ -256,7 +244,7 @@ void RuneHelperApp::OcrWorkerLoop()
             lastLoot.clear();
             stableOcrFrames = 0;
 
-            SleepOcrLoop(running_, ocrRebuildRequested_, singleSnapshotRequested_, 100);
+            SleepOcrLoop(running_, singleSnapshotRequested_, 100);
             continue;
         }
 
@@ -387,7 +375,7 @@ void RuneHelperApp::OcrWorkerLoop()
         if (stableOcrFrames >= kStableOcrFramesBeforeReuse)
             sleepMs = std::min(localConfig.ocrIntervalMs * 2, kMaxStableOcrIntervalMs);
 
-        SleepOcrLoop(running_, ocrRebuildRequested_, singleSnapshotRequested_, sleepMs);
+        SleepOcrLoop(running_, singleSnapshotRequested_, sleepMs);
     }
 }
 
@@ -471,9 +459,6 @@ void RuneHelperApp::HandleUIActions()
         }
     }
 
-    if (ui_.WantsOCRRebuild())
-        ocrRebuildRequested_ = true;
-
     if (ui_.WantsRegisterHotkeys())
         ui_.RegisterHotkeys();
 }
@@ -510,11 +495,6 @@ void RuneHelperApp::UpdateRegionPreview()
     };
 
     overlay_.SetRegionPreview(true, rect);
-}
-
-void RuneHelperApp::RequestOcrRebuild()
-{
-    ocrRebuildRequested_ = true;
 }
 
 void RuneHelperApp::Shutdown()

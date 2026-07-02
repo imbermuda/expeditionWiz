@@ -161,13 +161,9 @@ void UIDraw::DrawMainTab(UIManager& manager, UIState& state)
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Only shows the overlay when the Runeshape menu is detected.\nMay occasionally fail due to OCR inaccuracies.");
 
-    if (ImGui::SliderInt("OCR Passes", &config.ocrPasses, 1, 6))
-    {
-        configChanged = true;
-        state.wantsOCRRebuild = true;
-    }
+    configChanged |= ImGui::Checkbox("Debug OCR", &config.debugOCR);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("More passes can improve OCR, but use more CPU.");
+        ImGui::SetTooltip("Writes OCR crops and recognition logs to AppData\\Denz\\RuneHelper\\ocr_debug\\latest.");
 
     /*
     ImGui::SliderFloat("OCR Threshold", reinterpret_cast<float*>(&config_->ocrThreshold), 0.0f, 255.0f);
