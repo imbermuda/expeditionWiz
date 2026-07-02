@@ -19,41 +19,52 @@ Open the latest successful workflow run and download the artifact from the **Art
 
 * Select any loot area on the screen.
 * Real-time OCR using Tesseract.
-* Multi-pass OCR with configurable threshold presets.
+* Single-pass OCR tuned for the Runeshape loot menu.
 * Fuzzy matching for OCR mistakes.
 * Overlay displaying item prices next to detected items.
 * Automatic price cache updates.
-* Offline cache (`prices_dump.json`) to reduce API requests.
+* League-specific offline price cache to reduce API requests.
 * Debug window showing OCR and matching results.
+* Optional OCR debug image/text dumps.
 * No game memory reading or injection.
 
 ## Screenshot
 
 ![RuneHelper screenshot](assets/screenshot.png)
 
+## How to use
+
+Click **Select Region**, then drag a rectangle around the Runeshape loot list.
+
+![Region selection guide](assets/howto.gif)
+
 ## How it works
 
 1. Select the loot area on your screen.
 2. RuneHelper periodically captures the selected region.
-3. One or more OCR passes are performed using different threshold values.
-4. OCR mistakes are corrected using fuzzy matching.
-5. Prices are loaded from cache or downloaded from the API.
-6. An overlay is rendered next to the detected items.
+3. The OCR pipeline finds text rows in the right side of the Runeshape loot menu.
+4. Each detected row is cropped, binarized, and passed to Tesseract.
+5. OCR mistakes are corrected using fuzzy matching.
+6. Prices are loaded from cache or downloaded from the API.
+7. An overlay is rendered next to the detected items.
 
-## OCR Modes
+## OCR Debug
 
-RuneHelper supports multiple OCR passes to improve recognition of different texts.
+Enable **Debug OCR** in the UI to write the latest OCR inputs and recognition logs to:
 
-| Passes | Thresholds                |
-| -----: | ------------------------- |
-|      1 | 130                       |
-|      2 | 60, 130                   |
-|      3 | 30, 60, 130               |
-|      4 | 30, 60, 130, 180          |
-|      5 | 20, 30, 60, 130, 180      |
-|      6 | 20, 30, 60, 130, 180, 220 |
+```text
+Windows: %APPDATA%\Denz\RuneHelper\ocr_debug\latest
+Linux:   ~/.config/RuneHelper/ocr_debug/latest
+```
 
-More passes generally improve OCR accuracy but increase CPU usage.
+The folder is overwritten on each OCR run and may contain:
+
+* `source.png` - captured source region.
+* `rows_detected.png` - detected text rows and crop start markers.
+* `row_XX_row.png` - detected row crop.
+* `row_XX_text.png` - text crop sent to OCR preprocessing.
+* `row_XX_bin.png` - binarized image passed to Tesseract.
+* `row_XX_bin.txt` - raw OCR text, trimmed text, confidence, and accept/reject status.
 
 ## Dependencies
 
@@ -63,6 +74,8 @@ More passes generally improve OCR accuracy but increase CPU usage.
 * cpr
 * nlohmann/json
 * ImGui
+
+## Building on Windows
 
 Installed via vcpkg:
 
@@ -114,18 +127,18 @@ Prices are fetched from:
 https://poe.ninja/poe2/api/economy/exchange/current/overview?league=LEAGUE&type=TYPE
 ```
 
-The cache is stored in:
+The cache is stored in the RuneHelper app data directory as a league-specific dump:
 
 ```text
-prices_dump.json
+Windows: %APPDATA%\Denz\RuneHelper\prices_dump_<league>.json
+Linux:   ~/.config/RuneHelper/prices_dump_<league>.json
 ```
 
 The dump is refreshed automatically every 15 minutes.
 
 ## Known Issues
 
-* OCR may occasionally misread text even with high OCR Pass.
-* Higher OCR pass counts may noticeably increase CPU usage.
+* Linux support currently targets X11 only; Wayland support is not implemented yet.
 
 ## Disclaimer
 
