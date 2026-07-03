@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -9,12 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "nlohmann/json.hpp"
-
-struct PriceInfo
-{
-    std::string price;
-};
+#include "price/PriceProvider.h"
 
 class PriceCache
 {
@@ -35,15 +31,8 @@ public:
 
 private:
     static int64_t NowUnix();
-    static std::string EncodeUrlComponent(const std::string& text);
 
     void RefreshWorker();
-
-    std::unordered_map<std::string, PriceInfo> DownloadFullDump();
-    std::unordered_map<std::string, PriceInfo> DownloadPoeNinjaDump(const std::string& type);
-    std::unordered_map<std::string, PriceInfo> ParsePoeNinjaDump(const nlohmann::json& j);
-
-    static std::string FormatExPrice(double value);
 
     void LoadDump();
     void SaveDump();
@@ -56,6 +45,7 @@ private:
     int64_t dump_updated_at_ = 0;
     int64_t refresh_seconds_ = 60 * 60;
     std::string league_ = "Runes of Aldur";
+    std::unique_ptr<PriceProvider> provider_;
 
     std::atomic<bool> refreshInProgress_ = false;
     std::jthread refreshThread_;
