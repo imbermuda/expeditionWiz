@@ -226,6 +226,12 @@ bool UIBackend::IsRunning() const
     return impl_ && impl_->running;
 }
 
+void UIBackend::Minimize()
+{
+    if (impl_ && impl_->hwnd)
+        ShowWindow(impl_->hwnd, SW_MINIMIZE);
+}
+
 void UIBackend::RequestClose()
 {
     if (!impl_)
@@ -487,7 +493,7 @@ LRESULT CALLBACK UIBackend::Impl::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
         if (hit != HTCLIENT)
             return hit;
 
-        UIManager* self = reinterpret_cast<UIManager*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        Impl* self = reinterpret_cast<Impl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 
         if (!self)
             return HTCLIENT;

@@ -55,8 +55,6 @@ public:
     bool WantsRefreshPrices();
     bool WantsToggleOCR();
     bool WantsSingleSnapshot();
-    bool WantsTestOcr();
-    bool WantsResetOcr();
     bool WantsRegisterHotkeys();
 
     bool IsRegionHovered() const;
@@ -75,8 +73,8 @@ public:
     void RequestSingleSnapshot();
     void RequestSelectRegion();
     void RequestRegisterHotkeys();
+    void RequestMinimize();
     void RequestExit();
-    void MarkSaved();
 
 private:
     AppConfig* config_ = nullptr;

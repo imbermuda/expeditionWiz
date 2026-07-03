@@ -121,16 +121,6 @@ bool UIManager::WantsSingleSnapshot()
     return std::exchange(state_.wantsSingleSnapshot, false);
 }
 
-bool UIManager::WantsTestOcr()
-{
-    return std::exchange(state_.wantsTestOcr, false);
-}
-
-bool UIManager::WantsResetOcr()
-{
-    return std::exchange(state_.wantsResetOcr, false);
-}
-
 bool UIManager::WantsRegisterHotkeys()
 {
     return std::exchange(state_.wantsRegisterHotkeys, false);
@@ -156,11 +146,7 @@ bool UIManager::CaptureNextHotkey(int& key)
 
 bool UIManager::SaveConfig()
 {
-    if (!configManager_ || !configManager_->Save())
-        return false;
-
-    MarkSaved();
-    return true;
+    return configManager_ && configManager_->Save();
 }
 
 
@@ -218,16 +204,16 @@ void UIManager::RequestRegisterHotkeys()
     state_.wantsRegisterHotkeys = true;
 }
 
+void UIManager::RequestMinimize()
+{
+    if (backend_)
+        backend_->Minimize();
+}
+
 void UIManager::RequestExit()
 {
     state_.running = false;
 
     if (backend_)
         backend_->RequestClose();
-}
-
-void UIManager::MarkSaved()
-{
-    state_.showSaved = true;
-    state_.savedAt = std::chrono::steady_clock::now();
 }

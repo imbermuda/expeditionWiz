@@ -1,7 +1,5 @@
 #include "ui/UIDraw.h"
 
-#include <algorithm>
-#include <chrono>
 #include <mutex>
 #include <string>
 
@@ -9,7 +7,6 @@
 
 #include "core/Logger.h"
 #include "ui/UIManager.h"
-#include "core/Helpers.h"
 
 namespace
 {
@@ -31,8 +28,7 @@ void UIDraw::DrawTitleBar(UIManager& manager, UIState&)
     ImGui::SameLine(ImGui::GetWindowWidth() - 40.0f);
 
     if (ImGui::Button("_", ImVec2(16, 16)))
-    {
-    };// ShowWindow(hwnd_, SW_MINIMIZE);
+        manager.RequestMinimize();
 
     ImGui::SameLine();
 
@@ -109,22 +105,7 @@ void UIDraw::DrawMainTab(UIManager& manager, UIState& state)
 
     ImGui::EndTable();
     ImGui::Spacing();
-    /*
-    row("CPU");
-    ImVec4 cpuColor = kGreen;
-    if (state_.cpuUsagePercent > 20.0)
-        cpuColor = kYellow;
 
-    if (state_.cpuUsagePercent > 50.0)
-        cpuColor = kRed;
-
-    ImGui::TextColored(cpuColor, "%.1f%%", state_.cpuUsagePercent);
-    row("RAM");
-    ImGui::Text("%zu MB", state.memoryUsageMb);
-
-    ImGui::EndTable();
-    ImGui::Spacing();
-    */
     //Region
     if (!manager.HasConfig())
         return;
@@ -164,12 +145,6 @@ void UIDraw::DrawMainTab(UIManager& manager, UIState& state)
     configChanged |= ImGui::Checkbox("Debug OCR", &config.debugOCR);
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Writes OCR crops and recognition logs to AppData\\Denz\\RuneHelper\\ocr_debug\\latest.");
-
-    /*
-    ImGui::SliderFloat("OCR Threshold", reinterpret_cast<float*>(&config_->ocrThreshold), 0.0f, 255.0f);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Image binarization threshold.\nLower values keep more details.\nHigher values remove noise but may lose characters.");
-    */
 
     configChanged |= ImGui::SliderInt("OCR interval (ms)", &config.ocrIntervalMs, 100, 2000);
     if (ImGui::IsItemHovered())
@@ -238,22 +213,6 @@ void UIDraw::DrawMainTab(UIManager& manager, UIState& state)
 
     //Bottom
     ImGui::Separator();
-
-    /*
-    if (state.showSaved)
-    {
-        auto elapsed = std::chrono::steady_clock::now() - state.savedAt;
-
-        if (elapsed < std::chrono::seconds(1))
-        {
-            ImGui::Text("Auto-saved");
-        }
-        else
-        {
-            state.showSaved = false;
-        }
-    }
-    */
 
     const char* DenzTag = "Denz";
     ImGui::SameLine(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(DenzTag).x);

@@ -407,6 +407,12 @@ bool UIBackend::IsRunning() const
     return impl_ && impl_->running;
 }
 
+void UIBackend::Minimize()
+{
+    if (impl_ && impl_->window)
+        glfwIconifyWindow(impl_->window);
+}
+
 void UIBackend::RequestClose()
 {
     if (!impl_)

@@ -22,6 +22,7 @@ public:
     void EndFrame();
 
     bool IsRunning() const;
+    void Minimize();
     void RequestClose();
 
     std::string HotkeyToString(int key) const;

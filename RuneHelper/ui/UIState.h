@@ -1,6 +1,5 @@
 #pragma once
 
-#include <chrono>
 #include <cstddef>
 
 struct UIState
@@ -15,8 +14,6 @@ struct UIState
     bool wantsRefreshPrices = false;
     bool wantsToggleOCR = false;
     bool wantsSingleSnapshot = false;
-    bool wantsTestOcr = false;
-    bool wantsResetOcr = false;
     bool wantsRegisterHotkeys = false;
 
     bool regionHovered = false;
@@ -24,14 +21,6 @@ struct UIState
     bool priceDownloading = false;
     size_t priceCount = 0;
 
-    bool showSaved = false;
-    std::chrono::steady_clock::time_point savedAt;
-
     int* waitingForHotkey = nullptr;
     bool hotkeyCaptureSkipFrame = false;
-
-    // Reserved for future optimization.
-    // Will be incremented whenever overlay data changes and used to
-    // skip unnecessary redraws without comparing the entire state.
-    int revision = 0; 
 };
