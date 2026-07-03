@@ -4,10 +4,13 @@ set(RUNEHELPER_COMMON_SOURCES
     RuneHelper/core/ConfigManager.cpp
     RuneHelper/core/Logger.cpp
     RuneHelper/core/OcrService.cpp
+    RuneHelper/core/ScreenCaptureService.cpp
     RuneHelper/core/Helpers.cpp
     RuneHelper/core/UpdateChecker.cpp
     RuneHelper/ocr/LootParser.cpp
+    RuneHelper/ocr/LootOverlayBuilder.cpp
     RuneHelper/ocr/NameNormalizer.cpp
+    RuneHelper/ocr/OcrFrameDiffer.cpp
     RuneHelper/ocr/OCR.cpp
     RuneHelper/price/PoeNinjaPriceProvider.cpp
     RuneHelper/price/PriceCache.cpp

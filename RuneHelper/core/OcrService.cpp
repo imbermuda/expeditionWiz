@@ -1,73 +1,23 @@
 #include "core/OcrService.h"
 
 #include <algorithm>
-#include <cmath>
-#include <optional>
 #include <thread>
 #include <utility>
 
-#include <opencv2/imgproc.hpp>
-
-#include "core/Helpers.h"
 #include "core/Logger.h"
-#include "ocr/LootParser.h"
+#include "ocr/LootOverlayBuilder.h"
 
 #ifdef _WIN32
 #include "platform/windows/ResourceHelper.h"
-#include "platform/windows/ScreenCapture.h"
 #else
 #include "platform/linux/ResourceHelper.h"
-#include "platform/linux/ScreenCapture.h"
 #endif
 
 namespace
 {
 constexpr int kStableOcrFramesBeforeReuse = 3;
-constexpr double kOcrPixelDiffThreshold = 8.0;
-constexpr double kOcrChangedPixelRatioThreshold = 0.002;
 constexpr int kMaxStableOcrIntervalMs = 2000;
 constexpr int kOcrSleepChunkMs = 50;
-
-cv::Mat ToOcrGray(const cv::Mat& img)
-{
-    if (img.channels() == 1)
-        return img.clone();
-
-    cv::Mat gray;
-    cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
-    return gray;
-}
-
-bool IsSimilarOcrFrame(const cv::Mat& currentGray, const cv::Mat& previousGray)
-{
-    if (currentGray.empty() ||
-        previousGray.empty() ||
-        currentGray.size() != previousGray.size() ||
-        currentGray.type() != previousGray.type())
-    {
-        return false;
-    }
-
-    cv::Mat diff;
-    cv::Mat changed;
-    cv::absdiff(currentGray, previousGray, diff);
-    cv::threshold(diff, changed, kOcrPixelDiffThreshold, 255, cv::THRESH_BINARY);
-
-    const double changedPixels = static_cast<double>(cv::countNonZero(changed));
-    const double totalPixels = static_cast<double>(currentGray.total());
-    return totalPixels > 0.0 && (changedPixels / totalPixels) < kOcrChangedPixelRatioThreshold;
-}
-
-bool HasCloseOverlayText(const std::vector<OverlayText>& texts, int y, int minDistance)
-{
-    for (const auto& t : texts)
-    {
-        if (std::abs(t.y - y) < minDistance)
-            return true;
-    }
-
-    return false;
-}
 
 void SleepOcrLoop(std::atomic<bool>& running, const std::atomic<bool>& singleSnapshotRequested, int sleepMs)
 {
@@ -128,9 +78,7 @@ void OcrService::Stop()
     if (workerThread_.joinable())
         workerThread_.join();
 
-#ifdef _WIN32
     screenCapture_.Shutdown();
-#endif
 }
 
 void OcrService::RequestSingleSnapshot()
@@ -216,9 +164,7 @@ void OcrService::WorkerLoop()
     }
 
     auto lastRefreshCheck = std::chrono::steady_clock::now();
-    cv::Mat lastOcrGray;
     std::vector<LootLine> lastLoot;
-    int stableOcrFrames = 0;
     bool forceOcrFrame = false;
 
     while (running_)
@@ -254,9 +200,8 @@ void OcrService::WorkerLoop()
 
         if (!localConfig.ocrEnabled && !runSingleSnapshot && !keepSnapshot)
         {
-            lastOcrGray.release();
+            frameDiffer_.Reset();
             lastLoot.clear();
-            stableOcrFrames = 0;
             ClearOverlayTexts();
             SleepOcrLoop(running_, singleSnapshotRequested_, 100);
             continue;
@@ -264,9 +209,8 @@ void OcrService::WorkerLoop()
 
         if (localConfig.regionW <= 0 || localConfig.regionH <= 0)
         {
-            lastOcrGray.release();
+            frameDiffer_.Reset();
             lastLoot.clear();
-            stableOcrFrames = 0;
             SleepOcrLoop(running_, singleSnapshotRequested_, 100);
             continue;
         }
@@ -278,27 +222,14 @@ void OcrService::WorkerLoop()
             localConfig.regionH
         );
 
-#ifdef _WIN32
         cv::Mat img = screenCapture_.CaptureRegion(localRegion);
-
-        if (img.empty())
-            img = CaptureRegion(localRegion);
-#else
-        cv::Mat img = CaptureRegion(localRegion);
-#endif
 
         if (!img.empty())
         {
             std::vector<LootLine> loot;
-            cv::Mat currentGray = ToOcrGray(img);
-            const bool similarFrame = !forceOcrFrame && IsSimilarOcrFrame(currentGray, lastOcrGray);
+            const bool similarFrame = frameDiffer_.IsSimilarFrame(img, forceOcrFrame);
 
-            if (similarFrame)
-                ++stableOcrFrames;
-            else
-                stableOcrFrames = 0;
-
-            if (similarFrame && stableOcrFrames >= kStableOcrFramesBeforeReuse && !lastLoot.empty())
+            if (similarFrame && frameDiffer_.StableFrames() >= kStableOcrFramesBeforeReuse && !lastLoot.empty())
             {
                 loot = lastLoot;
             }
@@ -309,10 +240,7 @@ void OcrService::WorkerLoop()
                 forceOcrFrame = false;
             }
 
-            lastOcrGray = std::move(currentGray);
-
-            DebugData debug;
-            std::vector<OverlayText> newTexts;
+            frameDiffer_.StoreFrame(img);
 
             std::vector<CachedItemName> cachedNames;
             {
@@ -320,78 +248,24 @@ void OcrService::WorkerLoop()
                 cachedNames = cachedItemNames_;
             }
 
-            for (const auto& item : loot)
-            {
-                DebugLine debugLine;
-                debugLine.ocrText = item.text;
-                debugLine.matchedText = "-";
-                debugLine.price = "-";
-                debugLine.confidence = 0;
+            LootOverlayBuildResult buildResult = LootOverlayBuilder::Build(
+                loot,
+                localRegion,
+                localConfig,
+                priceCache_,
+                cachedNames
+            );
 
-                auto parsed = LootParser::ParseLootLine(item.text);
-
-                std::string rawName = parsed.itemName;
-                int quantity = parsed.quantity;
-
-                auto price = priceCache_.GetPrice(rawName);
-
-                if (price)
-                {
-                    debugLine.matchedText = rawName;
-                    debugLine.confidence = 100;
-                }
-                else
-                {
-                    auto guess = FindBestItemMatch(rawName, cachedNames);
-
-                    if (guess)
-                    {
-                        debugLine.matchedText = guess->name;
-                        debugLine.confidence = guess->confidence;
-                        price = priceCache_.GetPrice(guess->name);
-                    }
-                }
-
-                if (!price)
-                {
-                    debug.lines.push_back(std::move(debugLine));
-                    continue;
-                }
-
-                debugLine.price = *price;
-
-                std::optional<double> value = LootParser::ParsePriceValue(*price);
-                double totalValue = value ? (*value * quantity) : 0.0;
-
-                int overlayY = localRegion.y + (item.y1 + item.y2) / 2 + localConfig.overlayOffsetY;
-
-                if (HasCloseOverlayText(newTexts, overlayY, 25))
-                {
-                    debug.lines.push_back(std::move(debugLine));
-                    continue;
-                }
-
-                OverlayText t;
-                t.color = GetPriceColor(totalValue, localConfig);
-                t.text = ToWide(LootParser::FormatStackPrice(*price, quantity));
-                t.x = localRegion.x + localRegion.width + localConfig.overlayOffsetX;
-                t.y = localRegion.y + (item.y1 + item.y2) / 2 + localConfig.overlayOffsetY;
-
-                newTexts.push_back(std::move(t));
-
-                debug.lines.push_back(std::move(debugLine));
-            }
-
-            SetOverlayTexts(std::move(newTexts));
+            SetOverlayTexts(std::move(buildResult.texts));
 
             {
                 std::lock_guard lock(debugMutex_);
-                debugData_ = std::move(debug);
+                debugData_ = std::move(buildResult.debug);
             }
         }
 
         int sleepMs = localConfig.ocrIntervalMs;
-        if (stableOcrFrames >= kStableOcrFramesBeforeReuse)
+        if (frameDiffer_.StableFrames() >= kStableOcrFramesBeforeReuse)
             sleepMs = std::min(localConfig.ocrIntervalMs * 2, kMaxStableOcrIntervalMs);
 
         SleepOcrLoop(running_, singleSnapshotRequested_, sleepMs);

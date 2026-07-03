@@ -9,5 +9,5 @@
 
 std::string ExtractItemName(const std::string& line);
 std::wstring ToWide(const std::string& s);
-OverlayColor GetPriceColor(double priceEx, AppConfig &config);
+OverlayColor GetPriceColor(double priceEx, const AppConfig& config);
 std::string VkToString(int vk);

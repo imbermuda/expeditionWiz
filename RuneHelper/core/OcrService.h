@@ -9,14 +9,12 @@
 
 #include "core/ConfigManager.h"
 #include "core/DebugData.h"
+#include "core/ScreenCaptureService.h"
 #include "ocr/NameNormalizer.h"
+#include "ocr/OcrFrameDiffer.h"
 #include "ocr/OCR.h"
 #include "price/PriceCache.h"
 #include "ui/OverlayState.h"
-
-#ifdef _WIN32
-#include "platform/windows/ScreenCaptureDXGI.h"
-#endif
 
 struct OcrServiceStatus
 {
@@ -64,10 +62,8 @@ private:
 
     PriceCache priceCache_;
     OCR ocr_;
-
-#ifdef _WIN32
-    ScreenCaptureWGC screenCapture_;
-#endif
+    ScreenCaptureService screenCapture_;
+    OcrFrameDiffer frameDiffer_;
 
     std::atomic<bool> running_ = false;
 

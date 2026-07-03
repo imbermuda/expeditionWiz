@@ -41,7 +41,7 @@ std::wstring ToWide(const std::string& s)
 }
 
 
-OverlayColor GetPriceColor(double priceEx, AppConfig& config)
+OverlayColor GetPriceColor(double priceEx, const AppConfig& config)
 {
     if (priceEx > config.priceColorVeryHigh)
         return OverlayRgb(255, 60, 60); // red
