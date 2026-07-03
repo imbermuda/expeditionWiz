@@ -5,7 +5,7 @@
 #include <fstream>
 
 #include "nlohmann/json.hpp"
-#include "Helpers.h"
+#include "platform/PlatformPaths.h"
 
 using json = nlohmann::json;
 

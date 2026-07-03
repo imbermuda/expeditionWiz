@@ -5,7 +5,7 @@
 #include <fstream>
 
 #include "core/Logger.h"
-#include "core/Helpers.h"
+#include "platform/PlatformPaths.h"
 #include "resources/resource.h"
 
 bool ExtractResourceToFile(int resId, LPCWSTR resType, const std::filesystem::path& outPath)

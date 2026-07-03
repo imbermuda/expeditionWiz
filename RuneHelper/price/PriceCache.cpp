@@ -1,7 +1,7 @@
 #include "PriceCache.h"
 
-#include "core/Helpers.h"
 #include "core/Logger.h"
+#include "platform/PlatformPaths.h"
 #include "price/PoeNinjaPriceProvider.h"
 
 #include <chrono>

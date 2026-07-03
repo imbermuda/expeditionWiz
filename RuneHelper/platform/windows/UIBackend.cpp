@@ -11,7 +11,6 @@
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
 
-#include "core/Helpers.h"
 #include "core/Logger.h"
 #include "ui/ImGuiStyleSetup.h"
 #include "ui/UIManager.h"
@@ -33,6 +32,21 @@ bool IsMouseVk(int vk)
     default:
         return false;
     }
+}
+
+std::string VkToString(int vk)
+{
+    if (vk == 0)
+        return "None";
+
+    UINT scan = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+
+    char name[128]{};
+
+    if (GetKeyNameTextA(scan << 16, name, sizeof(name)))
+        return name;
+
+    return std::to_string(vk);
 }
 }
 

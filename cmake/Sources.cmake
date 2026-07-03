@@ -5,7 +5,6 @@ set(RUNEHELPER_COMMON_SOURCES
     RuneHelper/core/Logger.cpp
     RuneHelper/core/OcrService.cpp
     RuneHelper/core/ScreenCaptureService.cpp
-    RuneHelper/core/Helpers.cpp
     RuneHelper/core/UpdateChecker.cpp
     RuneHelper/ocr/LootParser.cpp
     RuneHelper/ocr/LootOverlayBuilder.cpp

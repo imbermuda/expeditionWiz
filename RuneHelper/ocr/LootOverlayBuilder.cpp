@@ -2,10 +2,52 @@
 
 #include <cmath>
 #include <optional>
+#include <string>
 #include <utility>
 
-#include "core/Helpers.h"
 #include "ocr/LootParser.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+namespace
+{
+std::wstring ToWide(const std::string& s)
+{
+    if (s.empty())
+        return L"";
+
+#ifdef _WIN32
+    int size = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
+
+    if (size <= 0)
+        return L"";
+
+    std::wstring result(size - 1, L'\0');
+
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, result.data(), size);
+
+    return result;
+#else
+    return std::wstring(s.begin(), s.end());
+#endif
+}
+
+OverlayColor OverlayColorForPrice(double priceEx, const AppConfig& config)
+{
+    if (priceEx > config.priceColorVeryHigh)
+        return OverlayRgb(255, 60, 60);
+
+    if (priceEx > config.priceColorHigh)
+        return OverlayRgb(255, 220, 80);
+
+    if (priceEx > config.priceColorMedium)
+        return OverlayRgb(80, 255, 80);
+
+    return OverlayRgb(160, 160, 160);
+}
+}
 
 LootOverlayBuildResult LootOverlayBuilder::Build(
     const std::vector<LootLine>& loot,
@@ -68,7 +110,7 @@ LootOverlayBuildResult LootOverlayBuilder::Build(
         }
 
         OverlayText t;
-        t.color = GetPriceColor(totalValue, config);
+        t.color = OverlayColorForPrice(totalValue, config);
         t.text = ToWide(LootParser::FormatStackPrice(*price, quantity));
         t.x = region.x + region.width + config.overlayOffsetX;
         t.y = region.y + (item.y1 + item.y2) / 2 + config.overlayOffsetY;
