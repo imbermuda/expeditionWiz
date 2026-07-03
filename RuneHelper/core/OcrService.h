@@ -54,10 +54,14 @@ private:
     void InitOcr();
     void WorkerLoop();
 
+    void ResetRuntimeState();
+    void ResetStoppedState();
+    void ClearRuntimeBuffers();
     void ClearOverlayTexts();
     void SetOverlayTexts(std::vector<OverlayText> texts);
 
 private:
+    mutable std::mutex lifecycleMutex_;
     ConfigManager* configManager_ = nullptr;
 
     PriceCache priceCache_;

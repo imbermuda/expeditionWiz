@@ -38,12 +38,17 @@ OcrService::~OcrService()
 
 void OcrService::Start(ConfigManager& configManager)
 {
+    std::lock_guard lifecycleLock(lifecycleMutex_);
+
+    if (running_.load())
+    {
+        LOG_INFO("OcrService::Start() ignored because service is already running");
+        return;
+    }
+
     configManager_ = &configManager;
     running_ = true;
-    ocrReady_ = false;
-    ocrFailed_ = false;
-    ocrInitializing_ = true;
-    singleSnapshotRequested_ = false;
+    ResetRuntimeState();
 
     AppConfig config;
     {
@@ -70,7 +75,10 @@ void OcrService::Start(ConfigManager& configManager)
 
 void OcrService::Stop()
 {
-    running_ = false;
+    std::lock_guard lifecycleLock(lifecycleMutex_);
+
+    if (!running_.exchange(false) && !initThread_.joinable() && !workerThread_.joinable())
+        return;
 
     if (initThread_.joinable())
         initThread_.join();
@@ -79,15 +87,23 @@ void OcrService::Stop()
         workerThread_.join();
 
     screenCapture_.Shutdown();
+    configManager_ = nullptr;
+    ResetStoppedState();
 }
 
 void OcrService::RequestSingleSnapshot()
 {
+    if (!running_.load())
+        return;
+
     singleSnapshotRequested_ = true;
 }
 
 void OcrService::ForceRefreshPrices()
 {
+    if (!running_.load())
+        return;
+
     priceCache_.ForceRefreshAsync();
 }
 
@@ -269,6 +285,48 @@ void OcrService::WorkerLoop()
             sleepMs = std::min(localConfig.ocrIntervalMs * 2, kMaxStableOcrIntervalMs);
 
         SleepOcrLoop(running_, singleSnapshotRequested_, sleepMs);
+    }
+}
+
+void OcrService::ResetRuntimeState()
+{
+    ocrReady_ = false;
+    ocrFailed_ = false;
+    ocrInitializing_ = true;
+    singleSnapshotRequested_ = false;
+    singleSnapshotUntil_ = {};
+    overlayDirty_ = false;
+    frameDiffer_.Reset();
+    ClearRuntimeBuffers();
+}
+
+void OcrService::ResetStoppedState()
+{
+    ocrReady_ = false;
+    ocrFailed_ = false;
+    ocrInitializing_ = false;
+    singleSnapshotRequested_ = false;
+    singleSnapshotUntil_ = {};
+    overlayDirty_ = false;
+    frameDiffer_.Reset();
+    ClearRuntimeBuffers();
+}
+
+void OcrService::ClearRuntimeBuffers()
+{
+    {
+        std::lock_guard lock(overlayMutex_);
+        sharedTexts_.clear();
+    }
+
+    {
+        std::lock_guard lock(debugMutex_);
+        debugData_ = {};
+    }
+
+    {
+        std::lock_guard lock(cachedNamesMutex_);
+        cachedItemNames_.clear();
     }
 }
 
