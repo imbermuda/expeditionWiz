@@ -85,6 +85,16 @@ void RuneHelperApp::MainLoop()
 
         overlay_.SetFontSize(overlayFontSize);
 
+        static auto lastTop = std::chrono::steady_clock::now();
+
+        auto now = std::chrono::steady_clock::now();
+
+        if (now - lastTop > std::chrono::seconds(2))
+        {
+            overlay_.BringToTop();
+            lastTop = now;
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 }
