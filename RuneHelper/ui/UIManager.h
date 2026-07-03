@@ -32,7 +32,6 @@ public:
     UIManager& operator=(const UIManager&) = delete;
 
     bool Init(AppConfig* config, ConfigManager* configManager);
-    void SetupStyle();
 
     void Shutdown();
     void Pump();

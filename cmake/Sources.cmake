@@ -9,6 +9,7 @@ set(RUNEHELPER_COMMON_SOURCES
     RuneHelper/ocr/NameNormalizer.cpp
     RuneHelper/ocr/OCR.cpp
     RuneHelper/price/PriceCache.cpp
+    RuneHelper/ui/ImGuiStyleSetup.cpp
     RuneHelper/ui/Overlay.cpp
     RuneHelper/ui/UIManager.cpp
     RuneHelper/ui/UIDraw.cpp
