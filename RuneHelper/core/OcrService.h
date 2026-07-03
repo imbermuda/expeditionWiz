@@ -1,0 +1,93 @@
+#pragma once
+
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <mutex>
+#include <thread>
+#include <vector>
+
+#include "core/ConfigManager.h"
+#include "core/DebugData.h"
+#include "ocr/NameNormalizer.h"
+#include "ocr/OCR.h"
+#include "price/PriceCache.h"
+#include "ui/OverlayState.h"
+
+#ifdef _WIN32
+#include "platform/windows/ScreenCaptureDXGI.h"
+#endif
+
+struct OcrServiceStatus
+{
+    bool initializing = false;
+    bool ready = false;
+    bool failed = false;
+};
+
+struct PriceServiceStatus
+{
+    bool downloading = false;
+    size_t priceCount = 0;
+};
+
+class OcrService
+{
+public:
+    OcrService() = default;
+    ~OcrService();
+
+    OcrService(const OcrService&) = delete;
+    OcrService& operator=(const OcrService&) = delete;
+
+    void Start(ConfigManager& configManager);
+    void Stop();
+
+    void RequestSingleSnapshot();
+    void ForceRefreshPrices();
+
+    OcrServiceStatus GetStatus() const;
+    PriceServiceStatus GetPriceStatus() const;
+    DebugData GetDebugData();
+
+    bool ConsumeOverlayTexts(std::vector<OverlayText>& texts);
+
+private:
+    void InitOcr();
+    void WorkerLoop();
+
+    void ClearOverlayTexts();
+    void SetOverlayTexts(std::vector<OverlayText> texts);
+
+private:
+    ConfigManager* configManager_ = nullptr;
+
+    PriceCache priceCache_;
+    OCR ocr_;
+
+#ifdef _WIN32
+    ScreenCaptureWGC screenCapture_;
+#endif
+
+    std::atomic<bool> running_ = false;
+
+    std::atomic<bool> ocrReady_ = false;
+    std::atomic<bool> ocrFailed_ = false;
+    std::atomic<bool> ocrInitializing_ = true;
+
+    std::atomic<bool> singleSnapshotRequested_ = false;
+    std::chrono::steady_clock::time_point singleSnapshotUntil_;
+
+    std::atomic<bool> overlayDirty_ = false;
+    std::mutex overlayMutex_;
+    std::vector<OverlayText> sharedTexts_;
+
+    std::mutex debugMutex_;
+    DebugData debugData_;
+
+    std::mutex cachedNamesMutex_;
+    std::vector<CachedItemName> cachedItemNames_;
+
+    std::jthread initThread_;
+    std::jthread workerThread_;
+};

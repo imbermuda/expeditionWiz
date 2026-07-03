@@ -3,6 +3,7 @@ set(RUNEHELPER_COMMON_SOURCES
     RuneHelper/core/RuneHelperApp.cpp
     RuneHelper/core/ConfigManager.cpp
     RuneHelper/core/Logger.cpp
+    RuneHelper/core/OcrService.cpp
     RuneHelper/core/Helpers.cpp
     RuneHelper/core/UpdateChecker.cpp
     RuneHelper/ocr/LootParser.cpp
