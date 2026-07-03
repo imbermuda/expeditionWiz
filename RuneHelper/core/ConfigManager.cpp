@@ -53,8 +53,6 @@ void ConfigManager::Normalize(AppConfig& config)
 {
     config.regionW = std::max(0, config.regionW);
     config.regionH = std::max(0, config.regionH);
-    config.ocrScale = std::clamp(config.ocrScale, 0.5f, 4.0f);
-    config.ocrThreshold = std::clamp(config.ocrThreshold, 0.0f, 255.0f);
     config.ocrIntervalMs = std::clamp(config.ocrIntervalMs, 100, 2000);
     config.overlayFontSize = std::clamp(config.overlayFontSize, 8, 48);
     config.priceRefreshMinutes = std::clamp(config.priceRefreshMinutes, 1, 60);
@@ -84,8 +82,6 @@ bool ConfigManager::Load()
 
     config_.ocrEnabled      = j.value("ocrEnabled",     config_.ocrEnabled);
     config_.ocrAutoDetect   = j.value("ocrAutoDetect",  config_.ocrAutoDetect);
-    config_.ocrScale        = j.value("ocrScale",       config_.ocrScale);
-    config_.ocrThreshold    = j.value("ocrThreshold",   config_.ocrThreshold);
     config_.ocrIntervalMs   = j.value("ocrIntervalMs",  config_.ocrIntervalMs);
 
     config_.hotkeyToggleOCR         = j.value("hotkeyToggleOCR",        config_.hotkeyToggleOCR);
@@ -102,10 +98,8 @@ bool ConfigManager::Load()
 
     config_.priceRefreshMinutes = j.value("priceRefreshMinutes",    config_.priceRefreshMinutes);
     config_.priceLeague         = j.value("priceLeague",            config_.priceLeague);
-    config_.priceProvider       = j.value("priceProvider",          config_.priceProvider);
 
     config_.debugOCR    = j.value("debugOCR",       config_.debugOCR);
-    config_.showConsole = j.value("showConsole",    config_.showConsole);
 
     Normalize(config_);
 
@@ -126,8 +120,6 @@ bool ConfigManager::Save() const
 
     j["ocrEnabled"]     = config.ocrEnabled;
     j["ocrAutoDetect"]  = config.ocrAutoDetect;
-    j["ocrScale"]       = config.ocrScale;
-    j["ocrThreshold"]   = config.ocrThreshold;
     j["ocrIntervalMs"]  = config.ocrIntervalMs;
 
     j["overlayOffsetX"]     = config.overlayOffsetX;
@@ -144,10 +136,8 @@ bool ConfigManager::Save() const
 
     j["priceRefreshMinutes"]    = config.priceRefreshMinutes;
     j["priceLeague"]            = config.priceLeague;
-    j["priceProvider"]          = config.priceProvider;
 
     j["debugOCR"]       = config.debugOCR;
-    j["showConsole"]    = config.showConsole;
 
     std::ofstream file(GetConfigPath());
 

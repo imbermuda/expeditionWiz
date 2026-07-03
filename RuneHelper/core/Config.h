@@ -12,8 +12,6 @@ struct AppConfig
 
     bool ocrEnabled         = true;
     bool ocrAutoDetect      = true;
-    float ocrScale          = 1.0f;
-    float ocrThreshold      = 130.0f;
     int ocrIntervalMs       = 600;
 
     int hotkeyToggleOCR         = 0x77; //VK_F8;
@@ -31,8 +29,6 @@ struct AppConfig
     int priceRefreshMinutes = 15;
 
     std::string priceLeague = "Runes of Aldur";
-    std::string priceProvider = "";
 
     bool debugOCR = false;
-    bool showConsole = false;
 };
