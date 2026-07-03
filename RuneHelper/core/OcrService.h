@@ -59,6 +59,7 @@ private:
     void ClearRuntimeBuffers();
     void ClearOverlayTexts();
     void SetOverlayTexts(std::vector<OverlayText> texts);
+    void PublishOverlayTexts(std::vector<OverlayText> texts);
 
 private:
     mutable std::mutex lifecycleMutex_;
@@ -81,6 +82,7 @@ private:
     std::atomic<bool> overlayDirty_ = false;
     std::mutex overlayMutex_;
     std::vector<OverlayText> sharedTexts_;
+    int emptyOverlayFrames_ = 0;
 
     std::mutex debugMutex_;
     DebugData debugData_;

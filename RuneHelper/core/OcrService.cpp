@@ -18,6 +18,7 @@ namespace
 constexpr int kStableOcrFramesBeforeReuse = 3;
 constexpr int kMaxStableOcrIntervalMs = 2000;
 constexpr int kOcrSleepChunkMs = 50;
+constexpr int kEmptyOverlayFramesBeforeClear = 3;
 
 void SleepOcrLoop(std::atomic<bool>& running, const std::atomic<bool>& singleSnapshotRequested, int sleepMs)
 {
@@ -28,6 +29,25 @@ void SleepOcrLoop(std::atomic<bool>& running, const std::atomic<bool>& singleSna
         std::this_thread::sleep_for(std::chrono::milliseconds(chunkMs));
         remainingMs -= chunkMs;
     }
+}
+
+bool EqualOverlayText(const OverlayText& a, const OverlayText& b)
+{
+    return a.x == b.x && a.y == b.y && a.color == b.color && a.text == b.text;
+}
+
+bool EqualOverlayTexts(const std::vector<OverlayText>& a, const std::vector<OverlayText>& b)
+{
+    if (a.size() != b.size())
+        return false;
+
+    for (size_t i = 0; i < a.size(); ++i)
+    {
+        if (!EqualOverlayText(a[i], b[i]))
+            return false;
+    }
+
+    return true;
 }
 }
 
@@ -272,7 +292,7 @@ void OcrService::WorkerLoop()
                 cachedNames
             );
 
-            SetOverlayTexts(std::move(buildResult.texts));
+            PublishOverlayTexts(std::move(buildResult.texts));
 
             {
                 std::lock_guard lock(debugMutex_);
@@ -296,6 +316,7 @@ void OcrService::ResetRuntimeState()
     singleSnapshotRequested_ = false;
     singleSnapshotUntil_ = {};
     overlayDirty_ = false;
+    emptyOverlayFrames_ = 0;
     frameDiffer_.Reset();
     ClearRuntimeBuffers();
 }
@@ -308,6 +329,7 @@ void OcrService::ResetStoppedState()
     singleSnapshotRequested_ = false;
     singleSnapshotUntil_ = {};
     overlayDirty_ = false;
+    emptyOverlayFrames_ = 0;
     frameDiffer_.Reset();
     ClearRuntimeBuffers();
 }
@@ -332,12 +354,32 @@ void OcrService::ClearRuntimeBuffers()
 
 void OcrService::ClearOverlayTexts()
 {
+    emptyOverlayFrames_ = 0;
     SetOverlayTexts({});
 }
 
 void OcrService::SetOverlayTexts(std::vector<OverlayText> texts)
 {
     std::lock_guard lock(overlayMutex_);
+
+    if (EqualOverlayTexts(sharedTexts_, texts))
+        return;
+
     sharedTexts_ = std::move(texts);
     overlayDirty_ = true;
+}
+
+void OcrService::PublishOverlayTexts(std::vector<OverlayText> texts)
+{
+    if (!texts.empty())
+    {
+        emptyOverlayFrames_ = 0;
+        SetOverlayTexts(std::move(texts));
+        return;
+    }
+
+    ++emptyOverlayFrames_;
+
+    if (emptyOverlayFrames_ >= kEmptyOverlayFramesBeforeClear)
+        SetOverlayTexts({});
 }
