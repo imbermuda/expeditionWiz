@@ -2,11 +2,32 @@
 
 #include <windows.h>
 
+#include <array>
 #include <fstream>
 
 #include "core/Logger.h"
 #include "platform/PlatformPaths.h"
 #include "resources/resource.h"
+
+namespace
+{
+struct RuneTemplateResource
+{
+    int id;
+    const char* filename;
+};
+
+constexpr std::array<RuneTemplateResource, 8> kRuneTemplates{{
+    { IDR_RUNE_TEMPLATE_1, "A1.png" },
+    { IDR_RUNE_TEMPLATE_2, "A2.png" },
+    { IDR_RUNE_TEMPLATE_3, "B1.png" },
+    { IDR_RUNE_TEMPLATE_4, "C1.png" },
+    { IDR_RUNE_TEMPLATE_5, "C2.png" },
+    { IDR_RUNE_TEMPLATE_6, "C3.png" },
+    { IDR_RUNE_TEMPLATE_7, "S1.png" },
+    { IDR_RUNE_TEMPLATE_8, "S2.png" },
+}};
+}
 
 bool ExtractResourceToFile(int resId, LPCWSTR resType, const std::filesystem::path& outPath)
 {
@@ -72,4 +93,25 @@ std::string PrepareTessdata()
     }
 
     return dir.string();
+}
+
+std::filesystem::path PrepareRuneTemplates()
+{
+    LOG_INFO("PrepareRuneTemplates() -> call");
+
+    const auto dir = GetAppDataDir() / "runes";
+    std::filesystem::create_directories(dir);
+
+    for (const auto& runeTemplate : kRuneTemplates)
+    {
+        const auto outPath = dir / runeTemplate.filename;
+
+        if (std::filesystem::exists(outPath))
+            continue;
+
+        if (!ExtractResourceToFile(runeTemplate.id, MAKEINTRESOURCEW(10), outPath))
+            LOG_ERROR("PrepareRuneTemplates() -> failed to extract " + outPath.string());
+    }
+
+    return dir;
 }

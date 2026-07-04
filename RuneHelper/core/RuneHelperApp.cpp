@@ -66,6 +66,7 @@ void RuneHelperApp::MainLoop()
 
         PriceServiceStatus priceStatus = ocrService_.GetPriceStatus();
         ui_.SetPriceStatus(priceStatus.downloading, priceStatus.priceCount);
+        ui_.SetRuneCalibrationStatus(ocrService_.GetRuneCalibrationStatus());
         ui_.SetDebugData(ocrService_.GetDebugData());
 
         ui_.Pump();
@@ -113,6 +114,9 @@ void RuneHelperApp::HandleUIActions()
 
     if (ui_.WantsRefreshPrices())
         ocrService_.ForceRefreshPrices();
+
+    if (ui_.WantsCalibrateRunes())
+        ocrService_.RequestRuneCalibration();
 
     if (ui_.WantsSelectRegion())
     {

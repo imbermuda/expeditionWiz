@@ -61,6 +61,11 @@ void UIManager::SetPriceStatus(bool downloading, size_t priceCount)
     state_.priceCount = priceCount;
 }
 
+void UIManager::SetRuneCalibrationStatus(const RunePatternCalibrationStatus& status)
+{
+    state_.runeCalibrationStatus = status;
+}
+
 void UIManager::SetUpdateChecker(UpdateChecker* checker)
 {
     updateChecker_ = checker;
@@ -124,6 +129,11 @@ bool UIManager::WantsSingleSnapshot()
 bool UIManager::WantsRegisterHotkeys()
 {
     return std::exchange(state_.wantsRegisterHotkeys, false);
+}
+
+bool UIManager::WantsCalibrateRunes()
+{
+    return std::exchange(state_.wantsCalibrateRunes, false);
 }
 
 bool UIManager::IsRegionHovered() const

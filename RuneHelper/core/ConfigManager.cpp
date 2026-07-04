@@ -54,6 +54,8 @@ void ConfigManager::Normalize(AppConfig& config)
     config.regionW = std::max(0, config.regionW);
     config.regionH = std::max(0, config.regionH);
     config.ocrIntervalMs = std::clamp(config.ocrIntervalMs, 100, 2000);
+    if (config.runeSearchScale < 0.5 || config.runeSearchScale > 2.0)
+        config.runeSearchScale = 0.0;
     config.overlayFontSize = std::clamp(config.overlayFontSize, 8, 48);
     config.priceRefreshMinutes = std::clamp(config.priceRefreshMinutes, 1, 60);
     if (config.priceLeague == "Hardcore Runes of Aldur")
@@ -82,6 +84,9 @@ bool ConfigManager::Load()
 
     config_.ocrEnabled      = j.value("ocrEnabled",     config_.ocrEnabled);
     config_.ocrAutoDetect   = j.value("ocrAutoDetect",  config_.ocrAutoDetect);
+    config_.runeSearchEnabled  = j.value("runeSearchEnabled",  config_.runeSearchEnabled);
+    config_.priceSearchEnabled = j.value("priceSearchEnabled", config_.priceSearchEnabled);
+    config_.runeSearchScale    = j.value("runeSearchScale",    config_.runeSearchScale);
     config_.ocrIntervalMs   = j.value("ocrIntervalMs",  config_.ocrIntervalMs);
 
     config_.hotkeyToggleOCR         = j.value("hotkeyToggleOCR",        config_.hotkeyToggleOCR);
@@ -120,6 +125,9 @@ bool ConfigManager::Save() const
 
     j["ocrEnabled"]     = config.ocrEnabled;
     j["ocrAutoDetect"]  = config.ocrAutoDetect;
+    j["runeSearchEnabled"]  = config.runeSearchEnabled;
+    j["priceSearchEnabled"] = config.priceSearchEnabled;
+    j["runeSearchScale"]    = config.runeSearchScale;
     j["ocrIntervalMs"]  = config.ocrIntervalMs;
 
     j["overlayOffsetX"]     = config.overlayOffsetX;

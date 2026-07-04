@@ -152,15 +152,52 @@ void UIDraw::DrawMainTab(UIManager& manager, UIState& state)
 
     ImGui::Spacing();
 
-    //HOTKEYS
-    ImGui::SeparatorText("HOTKEYS");
-    DrawHotkeyButton(manager, state, "Toggle OCR", config.hotkeyToggleOCR);
-    DrawHotkeyButton(manager, state, "Single Snapshot", config.hotkeySingleSnapshot);
-    DrawHotkeyButton(manager, state, "Select Region", config.hotkeySelectRegion);
+    //RUNES
+    ImGui::SeparatorText("RUNES");
+    configChanged |= ImGui::Checkbox("Enable Rune Search", &config.runeSearchEnabled);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Finds rune icons in the selected region and marks them on the overlay.");
+
+    if (ImGui::Button("Calibrate Runes"))
+        state.wantsCalibrateRunes = true;
+
+    ImGui::SameLine();
+    const RunePatternCalibrationStatus& runeCalibration = state.runeCalibrationStatus;
+    if (runeCalibration.running)
+    {
+        ImGui::TextDisabled(
+            "%d/%d (scale %.2f)",
+            runeCalibration.step,
+            runeCalibration.total,
+            runeCalibration.currentScale
+        );
+    }
+    else if (runeCalibration.bestScale > 0.0)
+    {
+        ImGui::TextDisabled(
+            "scale %.2f (%zu)",
+            runeCalibration.bestScale,
+            runeCalibration.bestMatches
+        );
+    }
+    else
+    {
+        ImGui::TextDisabled("not calibrated");
+    }
+
     ImGui::Spacing();
 
     //PRICES
     ImGui::SeparatorText("PRICES");
+
+    if (ImGui::Checkbox("Enable Price Search", &config.priceSearchEnabled))
+    {
+        configChanged = true;
+        if (config.priceSearchEnabled)
+            state.wantsRefreshPrices = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Matches OCR loot text against the price cache and shows prices on the overlay.");
 
     constexpr const char* kPriceLeagues[] = {
         "Runes of Aldur",
@@ -183,7 +220,8 @@ void UIDraw::DrawMainTab(UIManager& manager, UIState& state)
     {
         config.priceLeague = kPriceLeagues[selectedLeague];
         configChanged = true;
-        state.wantsRefreshPrices = true;
+        if (config.priceSearchEnabled)
+            state.wantsRefreshPrices = true;
     }
 
     configChanged |= ImGui::InputInt("Green >= ex", &config.priceColorMedium);
@@ -191,9 +229,22 @@ void UIDraw::DrawMainTab(UIManager& manager, UIState& state)
     configChanged |= ImGui::InputInt("Red >= ex", &config.priceColorVeryHigh);
     configChanged |= ImGui::SliderInt("Refresh minutes", &config.priceRefreshMinutes, 1, 60);
 
+    if (!config.priceSearchEnabled)
+        ImGui::BeginDisabled();
+
     if (ImGui::Button("Refresh Prices"))
         state.wantsRefreshPrices = true;
 
+    if (!config.priceSearchEnabled)
+        ImGui::EndDisabled();
+
+    ImGui::Spacing();
+
+    //HOTKEYS
+    ImGui::SeparatorText("HOTKEYS");
+    DrawHotkeyButton(manager, state, "Toggle OCR", config.hotkeyToggleOCR);
+    DrawHotkeyButton(manager, state, "Single Snapshot", config.hotkeySingleSnapshot);
+    DrawHotkeyButton(manager, state, "Select Region", config.hotkeySelectRegion);
     ImGui::Spacing();
 
     //OVERLAY

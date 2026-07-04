@@ -9,6 +9,7 @@
 #include "core/ConfigManager.h"
 #include "core/DebugData.h"
 #include "core/UpdateChecker.h"
+#include "ocr/RunePatternMatcher.h"
 #include "ui/UIState.h"
 
 class UIBackend;
@@ -40,6 +41,7 @@ public:
 
     void SetStatus(bool ocrInitializing, bool ocrReady, bool ocrFailed);
     void SetPriceStatus(bool downloading, size_t priceCount);
+    void SetRuneCalibrationStatus(const RunePatternCalibrationStatus& status);
     void SetUpdateChecker(UpdateChecker* checker);
     bool IsCheckingForUpdate() const;
     bool HasUpdate() const;
@@ -55,6 +57,7 @@ public:
     bool WantsToggleOCR();
     bool WantsSingleSnapshot();
     bool WantsRegisterHotkeys();
+    bool WantsCalibrateRunes();
 
     bool IsRegionHovered() const;
 

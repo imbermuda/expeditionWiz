@@ -7,6 +7,10 @@
 
 namespace
 {
+#ifndef WDA_EXCLUDEFROMCAPTURE
+constexpr DWORD WDA_EXCLUDEFROMCAPTURE = 0x00000011;
+#endif
+
 COLORREF ToColorRef(OverlayColor color)
 {
     return static_cast<COLORREF>(color);
@@ -114,6 +118,9 @@ bool WindowsOverlayBackend::Init(const char*, int, int)
     }
 
     SetLayeredWindowAttributes(hwnd_, RGB(0, 0, 0), 0, LWA_COLORKEY);
+    if (!SetWindowDisplayAffinity(hwnd_, WDA_EXCLUDEFROMCAPTURE))
+        LOG_ERROR("Windows overlay: SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE) failed");
+
     RecreateFont(state_.fontSize);
 
     ShowWindow(hwnd_, SW_SHOW);

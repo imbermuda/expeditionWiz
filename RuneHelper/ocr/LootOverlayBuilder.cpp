@@ -71,6 +71,12 @@ LootOverlayBuildResult LootOverlayBuilder::Build(
         std::string rawName = parsed.itemName;
         int quantity = parsed.quantity;
 
+        if (!config.priceSearchEnabled)
+        {
+            result.debug.lines.push_back(std::move(debugLine));
+            continue;
+        }
+
         auto price = priceCache.GetPrice(rawName);
 
         if (price)

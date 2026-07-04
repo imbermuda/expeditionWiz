@@ -13,6 +13,7 @@
 #include "ocr/NameNormalizer.h"
 #include "ocr/OcrFrameDiffer.h"
 #include "ocr/OCR.h"
+#include "ocr/RunePatternMatcher.h"
 #include "price/PriceCache.h"
 #include "ui/OverlayState.h"
 
@@ -42,10 +43,12 @@ public:
     void Stop();
 
     void RequestSingleSnapshot();
+    void RequestRuneCalibration();
     void ForceRefreshPrices();
 
     OcrServiceStatus GetStatus() const;
     PriceServiceStatus GetPriceStatus() const;
+    RunePatternCalibrationStatus GetRuneCalibrationStatus() const;
     DebugData GetDebugData();
 
     bool ConsumeOverlayTexts(std::vector<OverlayText>& texts);
@@ -58,6 +61,7 @@ private:
     void ResetStoppedState();
     void ClearRuntimeBuffers();
     void ClearOverlayTexts();
+    void SaveRuneCalibrationScale(double scale);
     void SetOverlayTexts(std::vector<OverlayText> texts);
     void PublishOverlayTexts(std::vector<OverlayText> texts);
 

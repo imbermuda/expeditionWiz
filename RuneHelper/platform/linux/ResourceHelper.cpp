@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "core/Logger.h"
+#include "platform/PlatformPaths.h"
 
 namespace
 {
@@ -64,4 +65,39 @@ std::string PrepareTessdata()
     LOG_INFO("Linux PrepareTessdata() -> return " + dir.string());
 
     return dir.string();
+}
+
+std::filesystem::path PrepareRuneTemplates()
+{
+    LOG_INFO("Linux PrepareRuneTemplates() -> call");
+
+    const auto dir = GetAppDataDir() / "runes";
+    std::filesystem::create_directories(dir);
+
+#ifdef RUNEHELPER_SOURCE_DIR
+    const std::filesystem::path configuredSource =
+        std::filesystem::path(RUNEHELPER_SOURCE_DIR) / "RuneHelper" / "resources" / "runes";
+
+    if (std::filesystem::exists(configuredSource))
+    {
+        std::filesystem::copy(
+            configuredSource,
+            dir,
+            std::filesystem::copy_options::skip_existing | std::filesystem::copy_options::recursive
+        );
+        return dir;
+    }
+#endif
+
+    const std::filesystem::path fallbackSource = std::filesystem::path("RuneHelper") / "resources" / "runes";
+    if (std::filesystem::exists(fallbackSource))
+    {
+        std::filesystem::copy(
+            fallbackSource,
+            dir,
+            std::filesystem::copy_options::skip_existing | std::filesystem::copy_options::recursive
+        );
+    }
+
+    return dir;
 }
