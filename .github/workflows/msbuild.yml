@@ -59,4 +59,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: runehelper-windows-x86_64
-          path: build/${{ env.CMAKE_PRESET }}/RuneHelper.exe
+          path: |
+            build/${{ env.CMAKE_PRESET }}/RuneHelper.exe
+            build/${{ env.CMAKE_PRESET }}/combinations.json

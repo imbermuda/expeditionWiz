@@ -54,7 +54,8 @@ jobs:
           BIN=$(find build -maxdepth 2 -type f -executable ! -name "*.so" | head -n 1)
           echo "Found binary: $BIN"
           cp "$BIN" dist/RuneHelper
-          tar -czf runehelper-linux-x86_64.tar.gz -C dist RuneHelper
+          cp RuneHelper/resources/combinations.json dist/combinations.json
+          tar -czf runehelper-linux-x86_64.tar.gz -C dist RuneHelper combinations.json
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
