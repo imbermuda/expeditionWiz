@@ -181,13 +181,28 @@ std::vector<cv::Rect> OCR::FindLootRows(const cv::Mat& img) const
     cv::Mat dark;
     cv::threshold(rightGray, dark, 115, 255, cv::THRESH_BINARY_INV);
 
+    // Columns that are dark in most scanlines are background/border art
+    // (e.g. the Runeshape book's dark page edge), not text. Counting them
+    // makes every scanline pass the ink threshold and merges the whole
+    // region into one giant rejected band. Mask them out.
+    {
+        constexpr double kMaxDarkColumnFraction = 0.60;
+        const int maxDark = static_cast<int>(dark.rows * kMaxDarkColumnFraction);
+
+        for (int x = 0; x < dark.cols; ++x)
+        {
+            if (cv::countNonZero(dark.col(x)) > maxDark)
+                dark.col(x).setTo(0);
+        }
+    }
+
     cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 2));
     cv::morphologyEx(dark, dark, cv::MORPH_CLOSE, kernel);
 
     constexpr int kMinInkPerRow = 12;
     constexpr int kMaxBlankGap = 4;
     constexpr int kMinTextBandHeight = 10;
-    constexpr int kMaxTextBandHeight = 42;
+    constexpr int kMaxTextBandHeight = 48;
     constexpr int kVerticalPadding = 8;
 
     bool inBand = false;
