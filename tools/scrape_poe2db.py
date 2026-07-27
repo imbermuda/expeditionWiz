@@ -5,17 +5,23 @@ Usage:
     pip install requests beautifulsoup4
     python tools/scrape_poe2db.py                       # writes RuneHelper/resources/combinations.json
     python tools/scrape_poe2db.py -o out.json           # custom output path
-    python tools/scrape_poe2db.py --dump-html page.html # save raw HTML for selector debugging
+    python tools/scrape_poe2db.py --dump-html page.html # also save raw HTML for debugging
     python tools/scrape_poe2db.py --from-html page.html # parse a saved HTML file instead of fetching
 
 Run this after every PoE2 patch that changes combinations. The C++ app loads
 the JSON from (in order): %APPDATA%/Denz/RuneHelper/combinations.json,
 combinations.json next to the exe, RuneHelper/resources/combinations.json.
 
-poe2db markup changes occasionally. The parser tries several strategies and
-prints per-category counts at the end; compare them against the category
-counts shown on the page (e.g. "Currency /92"). If counts are off, re-run
-with --dump-html and adjust the selectors below.
+Page structure (verified 2026-07-27):
+  - div.card with header "Runeshape Combinations /N" holds every combination
+    with its real output name.
+  - Category cards ("Alloys /14", "Currency /92", "Gems /61", "Runes /131",
+    "Uniques /23") repeat the same combinations; unique entries there are
+    anonymous ("Very Rare Unique item"), so categories are matched back to
+    the combined list by their rune multiset.
+  - Each entry is div.d-flex.border-top; the header row is
+    div.d-flex.justify-content-between (output link + "xN" stack + "LvNN+"),
+    followed by one <a href="X_Rune"> per required rune (duplicates repeated).
 """
 
 from __future__ import annotations
@@ -28,25 +34,21 @@ import sys
 from pathlib import Path
 
 URL = "https://poe2db.tw/Runeshape_Combinations"
-UA = "expeditionWiz-scraper/1.0 (+https://github.com/imbermuda/expeditionWiz)"
+UA = "expeditionWiz-scraper/1.1 (+https://github.com/imbermuda/expeditionWiz)"
 
-RUNE_SUFFIX = re.compile(r"\s*Rune$", re.IGNORECASE)
-COUNT_RE = re.compile(r"^(?:x\s*)?(\d+)\s*x?$", re.IGNORECASE)
-LEVEL_RE = re.compile(r"L(?:v|vl|evel)\.?\s*(\d+)", re.IGNORECASE)
+RUNE_HREF = re.compile(r"^(?:[a-z]{2}/)?([A-Za-z_]+)_Rune$")
+COUNT_RE = re.compile(r"\bx\s*(\d+)\b")
+LEVEL_RE = re.compile(r"Lv\.?\s*(\d+)", re.IGNORECASE)
 
-CATEGORY_HINTS = {
-    "alloy": "alloy",
-    "currency": "currency",
-    "gem": "gem",
-    "rune": "rune",
-    "unique": "unique",
+CATEGORY_HEADERS = {
+    "Alloys": "alloy",
+    "Currency": "currency",
+    "Gems": "gem",
+    "Runes": "rune",
+    "Uniques": "unique",
 }
 
-
-def norm_rune(name: str) -> str:
-    """'Fire_Rune' / 'Fire Rune' -> 'Fire'."""
-    name = name.replace("_", " ").strip()
-    return RUNE_SUFFIX.sub("", name).strip()
+EXCLUDED_OUTPUT_HREFS = {"Rarity"}
 
 
 def fetch_html(dump_path: str | None) -> str:
@@ -60,102 +62,139 @@ def fetch_html(dump_path: str | None) -> str:
     return resp.text
 
 
+def entry_runes(entry, headrow) -> list[str]:
+    runes = []
+    for a in entry.find_all("a", href=True):
+        if headrow is not None and headrow in a.parents:
+            continue
+        href = a["href"].split("?")[0].split("#")[0]
+        m = RUNE_HREF.match(href)
+        if m:
+            runes.append(m.group(1).replace("_", " "))
+    return runes
+
+
+def entry_header(entry):
+    return entry.select_one("div.d-flex.justify-content-between")
+
+
+def parse_entry(entry) -> dict | None:
+    headrow = entry_header(entry)
+    if headrow is None:
+        return None
+
+    runes = entry_runes(entry, headrow)
+    if not runes:
+        return None
+
+    left = headrow.find("div")
+    if left is None:
+        return None
+
+    name_span = left.find("span")
+    output = ""
+    if name_span is not None:
+        out_a = None
+        for a in name_span.find_all("a", href=True):
+            href = a["href"].split("?")[0]
+            if href.startswith("Economy_") or href in EXCLUDED_OUTPUT_HREFS:
+                continue
+            out_a = a
+            break
+        if out_a is not None:
+            output = out_a.get_text(strip=True)
+        else:
+            output = COUNT_RE.sub("", name_span.get_text(" ", strip=True)).strip()
+
+    if not output:
+        return None
+
+    left_text = left.get_text(" ", strip=True)
+    count = 1
+    mcount = COUNT_RE.search(left_text)
+    if mcount:
+        count = int(mcount.group(1))
+
+    level = 0
+    mlevel = LEVEL_RE.search(left_text)
+    if mlevel:
+        level = int(mlevel.group(1))
+
+    return {
+        "output": output,
+        "count": count,
+        "level": level,
+        "category": "unknown",
+        "runes": runes,
+    }
+
+
 def parse(html: str) -> list[dict]:
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "html.parser")
+
+    combined_card = None
+    category_cards = {}
+
+    for card in soup.select("div.card"):
+        header_el = card.find(class_="card-header")
+        if header_el is None:
+            continue
+        header = header_el.get_text(strip=True)
+        if header.startswith("Runeshape Combinations"):
+            combined_card = card
+            continue
+        for prefix, category in CATEGORY_HEADERS.items():
+            if header.startswith(prefix):
+                category_cards[category] = card
+                break
+
+    if combined_card is None:
+        print("ERROR: combined 'Runeshape Combinations' card not found.", file=sys.stderr)
+        return []
+
+    # Category lookup from the category cards: exact (output, runes) match
+    # where names are available, rune-multiset fallback for anonymous entries
+    # (uniques are listed as "Very Rare Unique item").
+    category_by_name_runes: dict[tuple, str] = {}
+    category_by_runes: dict[tuple, str] = {}
+    for category, card in category_cards.items():
+        for entry in card.select("div.d-flex.border-top"):
+            parsed = parse_entry(entry)
+            if parsed is None:
+                continue
+            rune_key = tuple(sorted(parsed["runes"]))
+            category_by_runes.setdefault(rune_key, category)
+            if "Unique item" not in parsed["output"]:
+                category_by_name_runes[(parsed["output"], rune_key)] = category
+
     combos: list[dict] = []
     seen: set[tuple] = set()
+    uncategorized = 0
 
-    # Strategy: a combination card is any container that holds >= 2 links to
-    # rune pages (href containing 'Rune') AND a non-rune item link/heading
-    # (the output). We walk leaf-most containers first to avoid double counts.
-    def rune_links(el) -> list[str]:
-        out = []
-        for a in el.find_all("a", href=True):
-            href = a["href"]
-            m = re.search(r"/([A-Za-z_]+_Rune)(?:$|[/?#])", href)
-            if m:
-                out.append(norm_rune(m.group(1)))
-        return out
-
-    def output_candidates(el) -> list[str]:
-        names = []
-        # item links that are not rune links
-        for a in el.find_all("a", href=True):
-            if re.search(r"_Rune(?:$|[/?#])", a["href"]):
-                # crafted runes CAN be outputs (e.g. 'Greater Desert Rune');
-                # keep them only if the link text has a Lesser/Greater/qualifier
-                text = a.get_text(strip=True)
-                if re.match(r"^(Lesser|Greater|Ancient|Grand)\b", text):
-                    names.append(text)
-                continue
-            text = a.get_text(strip=True)
-            if text and len(text) > 2:
-                names.append(text)
-        for h in el.find_all(re.compile("^h[1-6]$")):
-            text = h.get_text(strip=True)
-            if text:
-                names.append(text)
-        return names
-
-    candidates = soup.find_all(True)
-    for el in candidates:
-        runes = rune_links(el)
-        if len(runes) < 2 or len(runes) > 10:
-            continue
-        # leaf-most: skip if a child container would match identically
-        child_match = False
-        for child in el.find_all(True, recursive=False):
-            if len(rune_links(child)) == len(runes):
-                child_match = True
-                break
-        if child_match:
+    for entry in combined_card.select("div.d-flex.border-top"):
+        combo = parse_entry(entry)
+        if combo is None:
             continue
 
-        outputs = [o for o in output_candidates(el) if norm_rune(o) not in runes]
-        if not outputs:
-            continue
-        output = outputs[0]
-
-        text = el.get_text(" ", strip=True)
-        count = 1
-        mcount = re.search(re.escape(output) + r"\s*x\s*(\d+)", text)
-        if mcount:
-            count = int(mcount.group(1))
-        level = 0
-        mlevel = LEVEL_RE.search(text)
-        if mlevel:
-            level = int(mlevel.group(1))
-
-        category = "unknown"
-        # look upward for a category section heading
-        parent = el
-        for _ in range(6):
-            parent = parent.parent
-            if parent is None:
-                break
-            pid = " ".join(filter(None, [parent.get("id", ""), " ".join(parent.get("class", []))])).lower()
-            for hint, cat in CATEGORY_HINTS.items():
-                if hint in pid:
-                    category = cat
-                    break
-            if category != "unknown":
-                break
-
-        key = (output, tuple(sorted(runes)))
+        key = (combo["output"], tuple(sorted(combo["runes"])))
         if key in seen:
             continue
         seen.add(key)
-        combos.append(
-            {
-                "output": output,
-                "count": count,
-                "level": level,
-                "category": category,
-                "runes": runes,
-            }
+
+        rune_key = tuple(sorted(combo["runes"]))
+        combo["category"] = (
+            category_by_name_runes.get((combo["output"], rune_key))
+            or category_by_runes.get(rune_key, "unknown")
         )
+        if combo["category"] == "unknown":
+            uncategorized += 1
+
+        combos.append(combo)
+
+    if uncategorized:
+        print(f"note: {uncategorized} combinations could not be matched to a category card")
 
     return combos
 
@@ -184,7 +223,7 @@ def main() -> int:
         "generated": _dt.date.today().isoformat(),
         "league": "Runes of Aldur",
         "complete": True,
-        "combinations": sorted(combos, key=lambda c: (c["category"], c["output"])),
+        "combinations": sorted(combos, key=lambda c: (c["category"], c["output"], -c["count"])),
     }
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -192,7 +231,7 @@ def main() -> int:
 
     print(f"wrote {len(combos)} combinations to {out}")
     print("per category:", json.dumps(by_cat, indent=2))
-    print("sanity-check these against the poe2db page header counts (expect ~321 total).")
+    print("sanity-check these against the page header counts (e.g. 'Currency /92').")
     return 0
 
 
