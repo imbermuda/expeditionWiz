@@ -2,10 +2,12 @@
 
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include <imgui.h>
 
 #include "core/Logger.h"
+#include "recipes/ExpeditionAdvisor.h"
 #include "ui/UIManager.h"
 
 namespace
@@ -271,6 +273,256 @@ void UIDraw::DrawMainTab(UIManager& manager, UIState& state)
     ImGui::TextDisabled("%s", DenzTag);
 }
 
+void UIDraw::DrawExpeditionTab(UIManager& manager, UIState&)
+{
+    ExpeditionAdvisor* advisor = manager.Advisor();
+
+    if (!advisor || !advisor->Ready())
+    {
+        ImGui::TextColored(kYellow, "No combinations.json loaded.");
+        ImGui::TextWrapped(
+            "Place combinations.json next to the executable or in the app data folder. "
+            "Generate a full one with: python tools/scrape_poe2db.py");
+        return;
+    }
+
+    bool advisorEnabled = true;
+
+    if (manager.HasConfig())
+    {
+        std::lock_guard configLock(manager.ConfigMutex());
+        AppConfig& config = manager.Config();
+
+        if (ImGui::Checkbox("Enable Pick Advisor", &config.advisorEnabled))
+        {
+            ConfigManager::Normalize(config);
+
+            if (!manager.SaveConfig())
+                LOG_ERROR("UI failed to autosave config");
+        }
+
+        advisorEnabled = config.advisorEnabled;
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", advisor->DataStatus().c_str());
+    }
+
+    if (!advisorEnabled)
+        return;
+
+    RuneInventory& inventory = advisor->Inventory();
+    bool inventoryChanged = false;
+
+    //ON SCREEN
+    ImGui::SeparatorText("ON SCREEN");
+
+    bool anyOnScreen = false;
+    int lineIndex = 0;
+
+    for (const auto& line : manager.GetDebugData().lines)
+    {
+        const std::string& name = line.matchedText != "-" ? line.matchedText : line.ocrText;
+        const std::string rune = advisor->MatchRuneName(name);
+
+        ++lineIndex;
+
+        if (rune.empty())
+            continue;
+
+        anyOnScreen = true;
+
+        ImGui::PushID(lineIndex);
+
+        if (ImGui::SmallButton("Take"))
+        {
+            inventory.Add(rune);
+            inventoryChanged = true;
+        }
+
+        ImGui::PopID();
+        ImGui::SameLine();
+
+        auto score = advisor->ScoreFor(rune);
+
+        if (score && score->ev > 0.0)
+        {
+            ImGui::Text("%s", rune.c_str());
+            ImGui::SameLine();
+            ImGui::TextColored(kGreen, "%.1f ev", score->ev);
+
+            if (!score->bestRecipe.empty() && ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip(
+                    "Best combo: %s (missing %d)",
+                    score->bestRecipe.c_str(),
+                    score->bestRecipeMissing);
+            }
+        }
+        else
+        {
+            ImGui::Text("%s", rune.c_str());
+            ImGui::SameLine();
+            ImGui::TextDisabled("no combo value");
+        }
+    }
+
+    if (!anyOnScreen)
+        ImGui::TextDisabled("No runes detected in the selected region.");
+
+    ImGui::Spacing();
+
+    //INVENTORY
+    const auto owned = inventory.Snapshot();
+
+    ImGui::SeparatorText("MY RUNES");
+    ImGui::TextDisabled("%d runes tracked", inventory.TotalRunes());
+    ImGui::SameLine();
+
+    if (ImGui::SmallButton("Clear All"))
+    {
+        inventory.Clear();
+        inventoryChanged = true;
+    }
+
+    {
+        const auto& runeNames = advisor->Database().RuneNames();
+        static int selectedRune = 0;
+
+        std::vector<const char*> names;
+        names.reserve(runeNames.size());
+
+        for (const auto& runeName : runeNames)
+            names.push_back(runeName.c_str());
+
+        if (selectedRune >= static_cast<int>(names.size()))
+            selectedRune = 0;
+
+        ImGui::SetNextItemWidth(180.0f);
+        ImGui::Combo("##addrune", &selectedRune, names.data(), static_cast<int>(names.size()));
+        ImGui::SameLine();
+
+        if (ImGui::SmallButton("Add") && !names.empty())
+        {
+            inventory.Add(names[selectedRune]);
+            inventoryChanged = true;
+        }
+    }
+
+    if (!owned.empty() &&
+        ImGui::BeginTable("rune_inventory_table", 3,
+            ImGuiTableFlags_Borders |
+            ImGuiTableFlags_RowBg |
+            ImGuiTableFlags_SizingStretchProp))
+    {
+        ImGui::TableSetupColumn("Rune");
+        ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+
+        for (const auto& [rune, count] : owned)
+        {
+            ImGui::TableNextRow();
+            ImGui::PushID(rune.c_str());
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(rune.c_str());
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%d", count);
+
+            ImGui::TableSetColumnIndex(2);
+
+            if (ImGui::SmallButton("-"))
+            {
+                inventory.Remove(rune);
+                inventoryChanged = true;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::SmallButton("+"))
+            {
+                inventory.Add(rune);
+                inventoryChanged = true;
+            }
+
+            ImGui::PopID();
+        }
+
+        ImGui::EndTable();
+    }
+
+    ImGui::Spacing();
+
+    //CLOSEST COMBOS
+    ImGui::SeparatorText("CLOSEST COMBOS");
+
+    const auto closest = advisor->ClosestRecipes();
+
+    if (closest.empty())
+    {
+        ImGui::TextDisabled("Take some runes to see combo progress.");
+    }
+    else if (ImGui::BeginTable("closest_combos_table", 4,
+        ImGuiTableFlags_Borders |
+        ImGuiTableFlags_RowBg |
+        ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_SizingStretchProp))
+    {
+        ImGui::TableSetupColumn("Combo");
+        ImGui::TableSetupColumn("Progress", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("Missing");
+
+        ImGui::TableHeadersRow();
+
+        for (const auto& recipe : closest)
+        {
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextWrapped("%s%s", recipe.output.c_str(),
+                recipe.count > 1 ? (" x" + std::to_string(recipe.count)).c_str() : "");
+
+            ImGui::TableSetColumnIndex(1);
+
+            if (recipe.missing == 0)
+                ImGui::TextColored(kGreen, "DONE");
+            else
+                ImGui::Text("%d/%d", recipe.have, recipe.total);
+
+            ImGui::TableSetColumnIndex(2);
+
+            if (recipe.priceText.empty())
+                ImGui::TextDisabled("-");
+            else
+                ImGui::Text("%s", recipe.priceText.c_str());
+
+            ImGui::TableSetColumnIndex(3);
+
+            std::string missing;
+
+            for (const auto& rune : recipe.missingRunes)
+            {
+                if (!missing.empty())
+                    missing += ", ";
+                missing += rune;
+            }
+
+            if (missing.empty())
+                ImGui::TextDisabled("-");
+            else
+                ImGui::TextWrapped("%s", missing.c_str());
+        }
+
+        ImGui::EndTable();
+    }
+
+    if (inventoryChanged)
+    {
+        if (!inventory.Save())
+            LOG_ERROR("UI failed to save rune inventory");
+    }
+}
+
 void UIDraw::DrawDebugTab(UIManager& manager, UIState&)
 {
     ImGui::SeparatorText("OCR DEBUG");
@@ -353,6 +605,12 @@ void UIDraw::Draw(UIManager& manager)
         if (ImGui::BeginTabItem("RuneHelper"))
         {
             DrawMainTab(manager, state);
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Expedition"))
+        {
+            DrawExpeditionTab(manager, state);
             ImGui::EndTabItem();
         }
 

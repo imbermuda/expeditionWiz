@@ -50,9 +50,14 @@ bool RuneHelperApp::Init()
     updateChecker_.Start();
     ui_.SetUpdateChecker(&updateChecker_);
 
+    if (!advisor_.Init())
+        LOG_ERROR("ExpeditionAdvisor: combinations.json not found - pick advisor disabled");
+
+    ui_.SetAdvisor(&advisor_);
+
     ui_.RegisterHotkeys();
 
-    ocrService_.Start(configManager_);
+    ocrService_.Start(configManager_, &advisor_);
 
     return true;
 }

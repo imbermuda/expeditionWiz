@@ -33,5 +33,7 @@ struct AppConfig
 
     std::string priceLeague = "Runes of Aldur";
 
+    bool advisorEnabled = true;
+
     bool debugOCR = false;
 };

@@ -12,6 +12,7 @@
 #include "ocr/RunePatternMatcher.h"
 #include "ui/UIState.h"
 
+class ExpeditionAdvisor;
 class UIBackend;
 class UIManager;
 
@@ -20,6 +21,7 @@ namespace UIDraw
 void Draw(UIManager& manager);
 void DrawTitleBar(UIManager& manager, UIState& state);
 void DrawMainTab(UIManager& manager, UIState& state);
+void DrawExpeditionTab(UIManager& manager, UIState& state);
 void DrawDebugTab(UIManager& manager, UIState& state);
 }
 
@@ -43,6 +45,8 @@ public:
     void SetPriceStatus(bool downloading, size_t priceCount);
     void SetRuneCalibrationStatus(const RunePatternCalibrationStatus& status);
     void SetUpdateChecker(UpdateChecker* checker);
+    void SetAdvisor(ExpeditionAdvisor* advisor);
+    ExpeditionAdvisor* Advisor() const;
     bool IsCheckingForUpdate() const;
     bool HasUpdate() const;
     std::string UpdateDownloadUrl() const;
@@ -82,6 +86,7 @@ private:
     AppConfig* config_ = nullptr;
     ConfigManager* configManager_ = nullptr;
     UpdateChecker* updateChecker_ = nullptr;
+    ExpeditionAdvisor* advisor_ = nullptr;
 
     UIState state_;
     DebugData debugData_;

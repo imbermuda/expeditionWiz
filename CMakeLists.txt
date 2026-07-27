@@ -61,3 +61,10 @@ if(WIN32)
         WIN32_EXECUTABLE ON
     )
 endif()
+
+# expeditionWiz: ship the runeshape combinations database next to the binary.
+add_custom_command(TARGET RuneHelper POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/RuneHelper/resources/combinations.json"
+        "$<TARGET_FILE_DIR:RuneHelper>/combinations.json"
+)

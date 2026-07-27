@@ -104,6 +104,8 @@ bool ConfigManager::Load()
     config_.priceRefreshMinutes = j.value("priceRefreshMinutes",    config_.priceRefreshMinutes);
     config_.priceLeague         = j.value("priceLeague",            config_.priceLeague);
 
+    config_.advisorEnabled = j.value("advisorEnabled", config_.advisorEnabled);
+
     config_.debugOCR    = j.value("debugOCR",       config_.debugOCR);
 
     Normalize(config_);
@@ -144,6 +146,8 @@ bool ConfigManager::Save() const
 
     j["priceRefreshMinutes"]    = config.priceRefreshMinutes;
     j["priceLeague"]            = config.priceLeague;
+
+    j["advisorEnabled"] = config.advisorEnabled;
 
     j["debugOCR"]       = config.debugOCR;
 

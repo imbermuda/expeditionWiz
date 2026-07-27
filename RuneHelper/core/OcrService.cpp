@@ -7,6 +7,7 @@
 #include "core/Logger.h"
 #include "ocr/LootOverlayBuilder.h"
 #include "ocr/RunePatternMatcher.h"
+#include "recipes/ExpeditionAdvisor.h"
 
 #ifdef _WIN32
 #include "platform/windows/ResourceHelper.h"
@@ -57,7 +58,7 @@ OcrService::~OcrService()
     Stop();
 }
 
-void OcrService::Start(ConfigManager& configManager)
+void OcrService::Start(ConfigManager& configManager, ExpeditionAdvisor* advisor)
 {
     std::lock_guard lifecycleLock(lifecycleMutex_);
 
@@ -68,6 +69,7 @@ void OcrService::Start(ConfigManager& configManager)
     }
 
     configManager_ = &configManager;
+    advisor_ = advisor;
     running_ = true;
     ResetRuntimeState();
 
@@ -112,6 +114,7 @@ void OcrService::Stop()
 
     screenCapture_.Shutdown();
     configManager_ = nullptr;
+    advisor_ = nullptr;
     ResetStoppedState();
 }
 
@@ -247,6 +250,9 @@ void OcrService::WorkerLoop()
             }
         }
 
+        if (advisor_ && localConfig.advisorEnabled)
+            advisor_->Recompute(priceCache_);
+
         bool runSingleSnapshot = singleSnapshotRequested_.exchange(false);
 
         if (runSingleSnapshot)
@@ -318,7 +324,8 @@ void OcrService::WorkerLoop()
                 localRegion,
                 localConfig,
                 priceCache_,
-                cachedNames
+                cachedNames,
+                advisor_
             );
 
             if (localConfig.runeSearchEnabled && !runeCalibrationRunning)

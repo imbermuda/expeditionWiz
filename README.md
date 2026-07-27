@@ -1,3 +1,22 @@
+# expeditionWiz
+
+A fork of [RuneHelper](https://github.com/Denzeriko/RuneHelper) that keeps the loot-price overlay and adds an **expedition rune pick advisor**: it scores every rune choice by the marginal expected value it adds toward completing [runeshape combinations](https://poe2db.tw/Runeshape_Combinations), relative to the runes you already hold.
+
+## expeditionWiz additions
+
+* **Pick advisor overlay** — rune rows get a `PICK #1 12.4ev` tag next to the price; the best pick on screen is highlighted.
+* **Expedition tab** — track your rune inventory (one-click "Take" on detected runes, or manual +/-), see the closest completable combos, their market value, and exactly which runes are missing.
+* **Combination database** — `RuneHelper/resources/combinations.json`, copied next to the binary at build time. The bundled file is a partial dev dataset; regenerate the full ~321-combo set with:
+
+```bash
+pip install requests beautifulsoup4
+python tools/scrape_poe2db.py
+```
+
+The app loads `combinations.json` from (in order): the app data dir, next to the exe, `resources/`. Scoring: each incomplete recipe contributes `value / missing²` to every rune it still needs, so near-complete high-value combos dominate. Reward values come from the existing poe.ninja price cache; rewards not on the exchange API (e.g. some uniques) score as unpriced for now.
+
+---
+
 # RuneHelper
 
 A lightweight overlay tool for **Path of Exile 2** that uses **OCR (Tesseract)** to detect item names on the screen and display their current market prices.

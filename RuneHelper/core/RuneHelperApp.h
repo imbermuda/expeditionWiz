@@ -3,6 +3,7 @@
 #include "core/ConfigManager.h"
 #include "core/OcrService.h"
 #include "core/UpdateChecker.h"
+#include "recipes/ExpeditionAdvisor.h"
 
 #include "ui/Overlay.h"
 #include "ui/UIManager.h"
@@ -30,4 +31,5 @@ private:
     OverlayWindow overlay_;
     UpdateChecker updateChecker_;
     OcrService ocrService_;
+    ExpeditionAdvisor advisor_;
 };

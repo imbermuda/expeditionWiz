@@ -71,6 +71,16 @@ void UIManager::SetUpdateChecker(UpdateChecker* checker)
     updateChecker_ = checker;
 }
 
+void UIManager::SetAdvisor(ExpeditionAdvisor* advisor)
+{
+    advisor_ = advisor;
+}
+
+ExpeditionAdvisor* UIManager::Advisor() const
+{
+    return advisor_;
+}
+
 bool UIManager::IsCheckingForUpdate() const
 {
     return updateChecker_ && updateChecker_->IsChecking();

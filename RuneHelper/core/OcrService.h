@@ -17,6 +17,8 @@
 #include "price/PriceCache.h"
 #include "ui/OverlayState.h"
 
+class ExpeditionAdvisor;
+
 struct OcrServiceStatus
 {
     bool initializing = false;
@@ -39,7 +41,7 @@ public:
     OcrService(const OcrService&) = delete;
     OcrService& operator=(const OcrService&) = delete;
 
-    void Start(ConfigManager& configManager);
+    void Start(ConfigManager& configManager, ExpeditionAdvisor* advisor = nullptr);
     void Stop();
 
     void RequestSingleSnapshot();
@@ -68,6 +70,7 @@ private:
 private:
     mutable std::mutex lifecycleMutex_;
     ConfigManager* configManager_ = nullptr;
+    ExpeditionAdvisor* advisor_ = nullptr;
 
     PriceCache priceCache_;
     OCR ocr_;

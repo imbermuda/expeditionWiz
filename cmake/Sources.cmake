@@ -14,6 +14,9 @@ set(RUNEHELPER_COMMON_SOURCES
     RuneHelper/ocr/RunePatternMatcher.cpp
     RuneHelper/price/PoeNinjaPriceProvider.cpp
     RuneHelper/price/PriceCache.cpp
+    RuneHelper/recipes/ExpeditionAdvisor.cpp
+    RuneHelper/recipes/RecipeDatabase.cpp
+    RuneHelper/recipes/RuneInventory.cpp
     RuneHelper/ui/ImGuiStyleSetup.cpp
     RuneHelper/ui/Overlay.cpp
     RuneHelper/ui/UIManager.cpp

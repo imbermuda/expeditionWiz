@@ -11,6 +11,8 @@
 #include "price/PriceCache.h"
 #include "ui/OverlayState.h"
 
+class ExpeditionAdvisor;
+
 struct LootOverlayBuildResult
 {
     DebugData debug;
@@ -25,7 +27,8 @@ public:
         const cv::Rect& region,
         const AppConfig& config,
         PriceCache& priceCache,
-        const std::vector<CachedItemName>& cachedNames);
+        const std::vector<CachedItemName>& cachedNames,
+        const ExpeditionAdvisor* advisor = nullptr);
 
 private:
     static bool HasCloseOverlayText(const std::vector<OverlayText>& texts, int y, int minDistance);
